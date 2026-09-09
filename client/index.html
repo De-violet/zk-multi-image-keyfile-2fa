@@ -19,7 +19,7 @@
 <body>
 
   <div id="appContainer" class="main-container">
-    <!-- Header Aplikasi Sederhana -->
+    <!-- Header Aplikasi -->
     <header class="simple-header">
       <div class="logo-icon">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -28,81 +28,35 @@
         </svg>
       </div>
       <h1>Zero-Knowledge 2FA</h1>
-      <p class="subtitle">Buktikan kepemilikan 3 file gambar pribadi Anda tanpa pernah mengunggah gambarnya ke server</p>
+      <p class="subtitle">Alur Kriptografis: 1. Daftar Akun &rarr; 2. Login Akun &rarr; 3. Verifier</p>
     </header>
 
     <!-- Kartu Utama -->
     <div id="authCard" class="card">
-      <!-- Tab Navigasi -->
+      <!-- Tab Navigasi Urut Sesuai Permintaan -->
       <div class="tabs">
-        <button id="tabBtnLogin" class="tab-btn active">Masuk (Login)</button>
-        <button id="tabBtnRegister" class="tab-btn">Daftar (Register)</button>
-        <button id="tabBtnZkLab" class="tab-btn btn-highlight">🔬 ZKP Interactive Lab</button>
+        <button id="tabBtnRegister" class="tab-btn active">1. Daftar Akun</button>
+        <button id="tabBtnLogin" class="tab-btn">2. Login Akun</button>
+        <button id="tabBtnVerifier" class="tab-btn btn-highlight">3. Verifier</button>
       </div>
 
-      <!-- ================= FORM LOGIN ================= -->
-      <form id="formLogin" class="form-content">
+      <!-- ================= 1. DAFTAR AKUN ================= -->
+      <form id="formRegister" class="form-content">
+        <div class="form-step-badge">Langkah 1 dari 3: Inisialisasi Akun & Komitmen Kriptografis</div>
+        
         <div class="form-group">
-          <label for="loginUsername">Username</label>
-          <input type="text" id="loginUsername" placeholder="Masukkan username Anda" required autocomplete="username">
-        </div>
-
-        <div class="form-group">
-          <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" placeholder="Masukkan password Anda" required autocomplete="current-password">
-        </div>
-
-        <div class="form-group">
-          <label>Kunci 2FA (Pilih 3 File Foto/Gambar yang Anda Gunakan Saat Pendaftaran)</label>
-          <p class="input-hint">Gunakan 3 gambar asli yang sama. Jika 1 gambar berbeda atau berubah 1 piksel saja, sirkuit ZKP akan langsung menolak.</p>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="loginSlot1">
-              <input type="file" id="loginFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot2">
-              <input type="file" id="loginFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot3">
-              <input type="file" id="loginFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="loginStatus" class="status-box" style="display: none;"></div>
-
-        <button type="submit" id="btnLoginSubmit" class="btn-primary">
-          <span class="btn-text">Masuk dengan ZK 2FA</span>
-          <div class="spinner" style="display: none;"></div>
-        </button>
-      </form>
-
-      <!-- ================= FORM REGISTER ================= -->
-      <form id="formRegister" class="form-content" style="display: none;">
-        <div class="form-group">
-          <label for="regUsername">Username Baru</label>
-          <input type="text" id="regUsername" placeholder="Pilih username Anda" required autocomplete="username">
+          <label for="regUsername">Username</label>
+          <input type="text" id="regUsername" placeholder="Pilih username Anda" required autocomplete="off">
         </div>
 
         <div class="form-group">
           <label for="regPassword">Password</label>
-          <input type="password" id="regPassword" placeholder="Buat password Anda" required autocomplete="new-password">
+          <input type="password" id="regPassword" placeholder="Buat password Anda" required autocomplete="off">
         </div>
 
         <div class="form-group">
-          <label>Kunci 2FA (Pilih 3 File Foto/Gambar Pribadi Bebas)</label>
-          <p class="input-hint">Pilih 3 foto apa saja dari komputer/HP Anda (foto pribadi, wallpaper, screenshot, dll). Gambar disimpan secara lokal dan tidak dikirim ke server.</p>
+          <label>Kunci 2FA (Pilih 3 File Foto Pribadi Anda)</label>
+          <p class="input-hint">Pilih 3 file foto bebas dari perangkat Anda. Foto tidak pernah dikirim ke server; hanya komitmen akar (Root Commitment) yang didaftarkan.</p>
           <div class="keyfile-grid">
             <div class="keyfile-slot" id="regSlot1">
               <input type="file" id="regFile1" accept="image/*" class="file-input">
@@ -131,22 +85,73 @@
         <div id="regStatus" class="status-box" style="display: none;"></div>
 
         <button type="submit" id="btnRegSubmit" class="btn-primary">
-          <span class="btn-text">Daftarkan Akun & Kunci 2FA</span>
+          <span class="btn-text">1. Daftarkan Akun & Kunci 2FA</span>
           <div class="spinner" style="display: none;"></div>
         </button>
       </form>
 
-      <!-- ================= ZKP INTERACTIVE LAB ================= -->
-      <div id="sectionZkLab" class="zk-lab-section" style="display: none;">
-        
-        <div class="lab-intro">
-          <h3>Uji Coba Kriptografi ZKP dengan Foto Anda Sendiri</h3>
-          <p>Pilih 3 foto asli dari perangkat Anda. Saksikan bagaimana browser WebAssembly Anda menghitung <strong>Witness</strong>, mensintesis <strong>Proof Groth16</strong>, dan membuktikannya via <strong>Verifier</strong> tanpa membocorkan foto tersebut.</p>
+      <!-- ================= 2. LOGIN AKUN ================= -->
+      <form id="formLogin" class="form-content" style="display: none;">
+        <div class="form-step-badge">Langkah 2 dari 3: Masuk Menggunakan Bukti Zero-Knowledge</div>
+
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" placeholder="Masukkan username Anda" required autocomplete="off">
         </div>
 
-        <!-- Input 3 Foto Nyata untuk Lab -->
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Masukkan password Anda" required autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Kunci 2FA (3 Foto yang Sama Saat Mendaftar)</label>
+          <p class="input-hint">Jika salah 1 foto berbeda atau termodifikasi, sirkuit ZK Circom akan langsung menolak di browser.</p>
+          <div class="keyfile-grid">
+            <div class="keyfile-slot" id="loginSlot1">
+              <input type="file" id="loginFile1" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview1">
+                <span class="slot-number">1</span>
+                <span class="slot-text">Pilih Foto 1</span>
+              </div>
+            </div>
+            <div class="keyfile-slot" id="loginSlot2">
+              <input type="file" id="loginFile2" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview2">
+                <span class="slot-number">2</span>
+                <span class="slot-text">Pilih Foto 2</span>
+              </div>
+            </div>
+            <div class="keyfile-slot" id="loginSlot3">
+              <input type="file" id="loginFile3" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview3">
+                <span class="slot-number">3</span>
+                <span class="slot-text">Pilih Foto 3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="loginStatus" class="status-box" style="display: none;"></div>
+
+        <button type="submit" id="btnLoginSubmit" class="btn-primary">
+          <span class="btn-text">2. Masuk dengan ZK 2FA</span>
+          <div class="spinner" style="display: none;"></div>
+        </button>
+      </form>
+
+      <!-- ================= 3. VERIFIER ================= -->
+      <div id="sectionVerifier" class="zk-lab-section" style="display: none;">
+        <div class="form-step-badge">Langkah 3 dari 3: Bedah & Uji Verifikasi Bukti Kriptografi</div>
+
+        <div class="lab-intro">
+          <h3>Pengujian Mandiri ZKP Verifier</h3>
+          <p>Uji secara langsung 3 pilar: perhitungan saksi (<strong>Witness</strong>), sintesis bukti (<strong>Proof</strong>), dan validasi pairing (<strong>Verifier</strong>) menggunakan foto pribadi Anda.</p>
+        </div>
+
+        <!-- 3 Foto untuk Verifier Test -->
         <div class="lab-photo-picker">
-          <div class="lab-photo-title">Pilih 3 Foto Asli Anda untuk Diuji:</div>
+          <div class="lab-photo-title">Pilih 3 Foto Asli Anda untuk Uji Verifier:</div>
           <div class="keyfile-grid">
             <div class="keyfile-slot" id="labSlot1">
               <input type="file" id="labFile1" accept="image/*" class="file-input">
@@ -174,72 +179,62 @@
         </div>
 
         <div class="lab-grid">
-          
-          <!-- TAHAP 1: WITNESS -->
+          <!-- Witness Card -->
           <div class="lab-card">
             <div class="lab-step-header">
-              <span class="step-badge">Tahap 1</span>
+              <span class="step-badge">Tahap A</span>
               <h4>Perhitungan Saksi (Witness)</h4>
             </div>
-            <p class="lab-desc">Browser mereduksi byte ketiga foto Anda menjadi elemen medan skalar kurva BN254 dan menghitung saksi sirkuit Circom (~1.412 constraints) secara lokal.</p>
-            
+            <p class="lab-desc">Mereduksi byte foto menjadi elemen skalar medan kurva BN254 dan menghitung saksi Circom (~1.412 constraints) secara lokal.</p>
             <div class="lab-actions">
-              <button type="button" id="btnLabGenWitness" class="btn-small-primary">1. Hitung Witness dari Foto</button>
+              <button type="button" id="btnLabGenWitness" class="btn-small-primary">Hitung Witness dari Foto</button>
             </div>
-
             <div id="labWitnessOutput" class="code-block">
-              <span class="code-placeholder">Pilih 3 foto di atas, lalu klik "1. Hitung Witness dari Foto"</span>
+              <span class="code-placeholder">Pilih 3 foto di atas lalu klik "Hitung Witness dari Foto"</span>
             </div>
           </div>
 
-          <!-- TAHAP 2: PROOF -->
+          <!-- Proof Card -->
           <div class="lab-card">
             <div class="lab-step-header">
-              <span class="step-badge">Tahap 2</span>
+              <span class="step-badge">Tahap B</span>
               <h4>Sintesis Bukti (Groth16 Proof)</h4>
             </div>
-            <p class="lab-desc">Menghasilkan bukti matematika ringkas 256-byte (&pi;<sub>A</sub>, &pi;<sub>B</sub>, &pi;<sub>C</sub>). Hanya bukti ini yang dikirim ke verifier, foto asli Anda tetap 100% di browser.</p>
-
+            <p class="lab-desc">Menghasilkan bukti matematika ringkas 256-byte (&pi;<sub>A</sub>, &pi;<sub>B</sub>, &pi;<sub>C</sub>). Foto asli tetap di perangkat Anda.</p>
             <div class="lab-actions">
-              <button type="button" id="btnLabGenProof" class="btn-small-primary" disabled>2. Sintesis Proof</button>
-              <button type="button" id="btnLabTamperProof" class="btn-small-danger" disabled title="Ubah 1 angka pada bukti untuk melihat apakah verifier mendeteksi kecurangan">🧪 Rusak Bukti (Tamper Proof)</button>
+              <button type="button" id="btnLabGenProof" class="btn-small-primary" disabled>Sintesis Proof</button>
+              <button type="button" id="btnLabTamperProof" class="btn-small-danger" disabled title="Uji ubah 1 angka pada bukti untuk membuktikan verifier menolak">🧪 Rusak Bukti (Tamper Proof)</button>
               <button type="button" id="btnLabCopyProof" class="btn-small-secondary" disabled>Salin JSON</button>
             </div>
-
             <div id="labProofOutput" class="code-block">
               <span class="code-placeholder">Menunggu sintesis bukti...</span>
             </div>
           </div>
 
-          <!-- TAHAP 3: VERIFIER -->
+          <!-- Verifier Card -->
           <div class="lab-card">
             <div class="lab-step-header">
-              <span class="step-badge">Tahap 3</span>
+              <span class="step-badge">Tahap C</span>
               <h4>Verifikasi Bukti (Verifier)</h4>
             </div>
-            <p class="lab-desc">Memverifikasi persamaan pairing kurva eliptik: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) = e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code>.</p>
-
+            <p class="lab-desc">Memvalidasi persamaan bilinear pairing <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) = e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code>.</p>
             <div class="lab-actions">
-              <button type="button" id="btnLabRunVerify" class="btn-small-primary" disabled>3. Jalankan Verifier</button>
+              <button type="button" id="btnLabRunVerify" class="btn-small-primary" disabled>Jalankan Verifier</button>
             </div>
-
             <div id="labVerifyOutput" class="verifier-result-box">
               <span class="code-placeholder">Menunggu eksekusi verifier...</span>
             </div>
-
-            <!-- Box Eksperimen Mandiri -->
             <div class="lab-experiment-tip">
-              💡 <strong>Tips Eksperimen:</strong> Setelah berhasil diverifikasi, coba ganti salah satu dari 3 foto di atas dengan foto lain, lalu ulangi langkah 1-3. Anda akan melihat bagaimana sirkuit Circom menolak seketika karena *Zero-Noise Tolerance*!
+              💡 <strong>Tips Eksperimen:</strong> Setelah verifikasi berhasil, coba klik tombol <strong>"🧪 Rusak Bukti"</strong> di Tahap B lalu klik kembali <strong>"Jalankan Verifier"</strong> untuk melihat bagaimana verifier menggagalkan data palsu!
             </div>
           </div>
-
         </div>
 
       </div>
 
     </div>
 
-    <!-- ================= TAMPILAN SUKSES LOGIN ================= -->
+    <!-- ================= LAYAR SUKSES LOGIN ================= -->
     <div id="successCard" class="card success-card" style="display: none;">
       <div class="success-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -261,7 +256,7 @@
       <div class="info-list">
         <div class="info-item">
           <span>Metode Verifikasi</span>
-          <strong>3 Kunci Gambar + Poseidon ZKP</strong>
+          <strong>3 Kunci Foto + Poseidon ZKP</strong>
         </div>
         <div class="info-item">
           <span>Durasi Verifikasi</span>
@@ -281,7 +276,10 @@
         </div>
       </details>
 
-      <button id="btnLogout" class="btn-secondary">Keluar (Logout)</button>
+      <div style="display: flex; gap: 10px; margin-top: 16px; draft-mode">
+        <button id="btnGoToVerifier" class="btn-primary" style="flex: 1; font-size: 0.85rem;">3. Lanjut ke Verifier &rarr;</button>
+        <button id="btnLogout" class="btn-secondary" style="flex: 1; margin-top: 4px;">Keluar (Logout)</button>
+      </div>
     </div>
 
     <!-- Footer -->

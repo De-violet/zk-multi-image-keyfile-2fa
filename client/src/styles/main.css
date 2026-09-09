@@ -128,6 +128,20 @@ body {
 }
 
 /* Form Styles */
+
+.form-step-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-bottom: 2px;
+}
+
 .form-content {
   display: flex;
   flex-direction: column;
