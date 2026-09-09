@@ -56,7 +56,11 @@ Buka browser Anda di **`http://localhost:3000`**.
 - **Poseidon Hash**: Hashing hierarkis hemat constraint kurva eliptik
 - **Express.js**: Server otentikasi dengan Anti-Replay Nonce Management (TTL 60s)
 
+## 🤝 Kontribusi
+Tertarik berkontribusi? Silakan baca panduan lengkap di **[CONTRIBUTING.md](CONTRIBUTING.md)** untuk alur kerja pengembangan, ide fitur, dan pengiriman Pull Request.
+
 ---
 
 ## 📜 Lisensi
 MIT License.
+

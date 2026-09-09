@@ -216,7 +216,7 @@ function updateLabFileDetails() {
 
   details.style.display = 'flex';
   details.innerHTML = state.labFiles.map((f, i) => {
-    if (!f) return `<div>• Foto ${i + 1}: <span style="color:#f87171;">Belum dipilih</span></div>`;
+    if (!f) return `<div>• Foto ${i + 1}: <span style="color:#71717a; font-style:italic;">Belum dipilih</span></div>`;
     const sizeKb = (f.size / 1024).toFixed(1);
     return `<div>• Foto ${i + 1}: <strong>${f.name}</strong> (${sizeKb} KB)</div>`;
   }).join('');
@@ -666,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnLabGenWitness.disabled = true;
     btnLabGenWitness.textContent = 'Menghitung Saksi...';
-    labWitnessOutput.innerHTML = '<span style="color:#93c5fd;">Membaca byte foto & menghitung reduksi SHA-256 modulo BN254...</span>';
+    labWitnessOutput.innerHTML = '<span style="color:#e4e4e7;">Membaca byte foto & menghitung reduksi SHA-256 modulo BN254...</span>';
 
     try {
       const [h1, h2, h3] = await Promise.all([
@@ -712,7 +712,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnLabGenProof.disabled = false;
       btnLabGenWitness.textContent = '✓ Hitung Witness dari Foto';
     } catch (err) {
-      labWitnessOutput.innerHTML = `<span style="color:#ef4444;">Error Witness: ${err.message}</span>`;
+      labWitnessOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Witness: ${err.message}</span>`;
       btnLabGenWitness.disabled = false;
       btnLabGenWitness.textContent = 'Hitung Witness dari Foto';
     }
@@ -724,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnLabGenProof.disabled = true;
     btnLabGenProof.textContent = 'Mensintesis Proof...';
-    labProofOutput.innerHTML = '<span style="color:#c4b5fd;">Menghitung bukti Groth16 di WebAssembly BN254 dari foto Anda...</span>';
+    labProofOutput.innerHTML = '<span style="color:#e4e4e7;">Menghitung bukti Groth16 di WebAssembly BN254 dari foto Anda...</span>';
 
     try {
       const res = await generateZkProof(state.labWitnessInputs);
@@ -755,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
       btnLabCopyProof.disabled = false;
       btnLabGenProof.textContent = '✓ Sintesis Proof';
     } catch (err) {
-      labProofOutput.innerHTML = `<span style="color:#ef4444;">Error Proof: ${err.message}</span>`;
+      labProofOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Proof: ${err.message}</span>`;
       btnLabGenProof.disabled = false;
       btnLabGenProof.textContent = 'Sintesis Proof';
     }
@@ -769,7 +769,7 @@ document.addEventListener('DOMContentLoaded', () => {
     state.labProof.pi_a[0] = altered;
 
     labProofOutput.innerHTML = `
-<span style="color:#f87171; font-weight: bold;">⚠️ BUKTI TELAH DIRUSAK (Tamper Test Aktif):</span>
+<span style="color:#ffffff; font-weight: bold; border-bottom: 1px solid #71717a;">⚠️ BUKTI TELAH DIRUSAK (Tamper Test Aktif):</span>
 Titik pi_a[0] kurva eliptik telah dimodifikasi!
 Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan menolaknya.
 `;
@@ -793,7 +793,7 @@ Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan
     btnLabRunVerify.disabled = true;
     btnLabRunVerify.textContent = 'Memverifikasi Pairing...';
     labVerifyOutput.className = 'verifier-result-box';
-    labVerifyOutput.innerHTML = '<span style="color:#93c5fd;">Mengecek persamaan bilinear pairing e(A,B) = e(alpha,beta) + ...</span>';
+    labVerifyOutput.innerHTML = '<span style="color:#e4e4e7;">Mengecek persamaan bilinear pairing e(A,B) = e(alpha,beta) + ...</span>';
 
     try {
       if (!state.labVKey) {
@@ -812,20 +812,20 @@ Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan
       if (isValid) {
         labVerifyOutput.className = 'verifier-result-box verified';
         labVerifyOutput.innerHTML = `
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">✅ PROOF VERIFIED (Valid Secara Matematis)</div>
-          <div style="font-size: 0.8rem; line-height: 1.4;">
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color:#ffffff;">✓ PROOF VERIFIED (Valid Secara Matematis)</div>
+          <div style="font-size: 0.8rem; line-height: 1.4; color:#a1a1aa;">
             • Persamaan Bilinear Pairing Terpenuhi: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) == e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code><br>
-            • Waktu verifikasi: <strong>${verifyDuration} ms</strong><br>
+            • Waktu verifikasi: <strong style="color:#ffffff;">${verifyDuration} ms</strong><br>
             • <strong>Zero-Knowledge Terbukti:</strong> Verifier membuktikan kepemilikan 3 foto asli tanpa foto pernah diunggah atau dilihat oleh siapapun!
           </div>
         `;
       } else {
         labVerifyOutput.className = 'verifier-result-box rejected';
         labVerifyOutput.innerHTML = `
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">❌ VERIFICATION FAILED (Bukti Ditolak)</div>
-          <div style="font-size: 0.8rem; line-height: 1.4;">
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color:#ffffff;">✕ VERIFICATION FAILED (Bukti Ditolak)</div>
+          <div style="font-size: 0.8rem; line-height: 1.4; color:#a1a1aa;">
             • Pairing Check Gagal: Nilai bukti matematika tidak memenuhi kurva eliptik BN254.<br>
-            • Waktu verifikasi: <strong>${verifyDuration} ms</strong><br>
+            • Waktu verifikasi: <strong style="color:#ffffff;">${verifyDuration} ms</strong><br>
             • Sistem berhasil menggagalkan manipulasi atau ketidakcocokan kunci!
           </div>
         `;
@@ -833,7 +833,7 @@ Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan
 
     } catch (err) {
       labVerifyOutput.className = 'verifier-result-box rejected';
-      labVerifyOutput.innerHTML = `<span style="color:#ef4444;">Error Verifikasi: ${err.message}</span>`;
+      labVerifyOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Verifikasi: ${err.message}</span>`;
     } finally {
       btnLabRunVerify.disabled = false;
       btnLabRunVerify.textContent = 'Jalankan Verifier';
