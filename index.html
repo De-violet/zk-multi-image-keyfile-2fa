@@ -8,7 +8,7 @@
   <!-- Font Modern & Ringan -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="/src/styles/main.css">
   
@@ -18,7 +18,7 @@
 </head>
 <body>
 
-  <div class="main-container">
+  <div id="appContainer" class="main-container">
     <!-- Header Aplikasi Sederhana -->
     <header class="simple-header">
       <div class="logo-icon">
@@ -31,15 +31,16 @@
       <p class="subtitle">Otentikasi 2-Faktor berbasis 3 Kunci Gambar tanpa mengirim gambar ke server</p>
     </header>
 
-    <!-- Kartu Utama Otentikasi -->
+    <!-- Kartu Utama -->
     <div id="authCard" class="card">
-      <!-- Tab Navigasi Sederhana -->
+      <!-- Tab Navigasi -->
       <div class="tabs">
         <button id="tabBtnLogin" class="tab-btn active">Masuk</button>
         <button id="tabBtnRegister" class="tab-btn">Daftar</button>
+        <button id="tabBtnZkLab" class="tab-btn btn-highlight">🔬 ZKP Test Lab</button>
       </div>
 
-      <!-- FORM LOGIN -->
+      <!-- ================= FORM LOGIN ================= -->
       <form id="formLogin" class="form-content">
         <div class="form-group">
           <label for="loginUsername">Username</label>
@@ -54,7 +55,6 @@
         <div class="form-group">
           <label>Kunci 2FA (Pilih 3 File Gambar yang Sama Saat Pendaftaran)</label>
           <div class="keyfile-grid">
-            <!-- Slot 1 -->
             <div class="keyfile-slot" id="loginSlot1">
               <input type="file" id="loginFile1" accept="image/*" class="file-input">
               <div class="slot-preview" id="loginPreview1">
@@ -62,7 +62,6 @@
                 <span class="slot-text">Pilih Gambar 1</span>
               </div>
             </div>
-            <!-- Slot 2 -->
             <div class="keyfile-slot" id="loginSlot2">
               <input type="file" id="loginFile2" accept="image/*" class="file-input">
               <div class="slot-preview" id="loginPreview2">
@@ -70,7 +69,6 @@
                 <span class="slot-text">Pilih Gambar 2</span>
               </div>
             </div>
-            <!-- Slot 3 -->
             <div class="keyfile-slot" id="loginSlot3">
               <input type="file" id="loginFile3" accept="image/*" class="file-input">
               <div class="slot-preview" id="loginPreview3">
@@ -89,7 +87,7 @@
         </button>
       </form>
 
-      <!-- FORM REGISTER -->
+      <!-- ================= FORM REGISTER ================= -->
       <form id="formRegister" class="form-content" style="display: none;">
         <div class="form-group">
           <label for="regUsername">Username Baru</label>
@@ -107,7 +105,6 @@
             <button type="button" id="btnGenSamples" class="btn-text-link">📥 Unduh Kunci Contoh</button>
           </div>
           <div class="keyfile-grid">
-            <!-- Slot 1 -->
             <div class="keyfile-slot" id="regSlot1">
               <input type="file" id="regFile1" accept="image/*" class="file-input">
               <div class="slot-preview" id="regPreview1">
@@ -115,7 +112,6 @@
                 <span class="slot-text">Pilih Gambar 1</span>
               </div>
             </div>
-            <!-- Slot 2 -->
             <div class="keyfile-slot" id="regSlot2">
               <input type="file" id="regFile2" accept="image/*" class="file-input">
               <div class="slot-preview" id="regPreview2">
@@ -123,7 +119,6 @@
                 <span class="slot-text">Pilih Gambar 2</span>
               </div>
             </div>
-            <!-- Slot 3 -->
             <div class="keyfile-slot" id="regSlot3">
               <input type="file" id="regFile3" accept="image/*" class="file-input">
               <div class="slot-preview" id="regPreview3">
@@ -141,9 +136,78 @@
           <div class="spinner" style="display: none;"></div>
         </button>
       </form>
+
+      <!-- ================= ZKP TEST LAB (WITNESS • PROOF • VERIFIER) ================= -->
+      <div id="sectionZkLab" class="zk-lab-section" style="display: none;">
+        
+        <div class="lab-intro">
+          <h3>Eksplorasi Pipeline Kriptografi Zero-Knowledge</h3>
+          <p>Uji secara terisolasi 3 pilar ZKP: perhitungan saksi (<strong>Witness</strong>), sintesis bukti (<strong>Proof</strong>), dan pembuktian matematis (<strong>Verifier</strong>) menggunakan kurva BN254 & Groth16.</p>
+        </div>
+
+        <div class="lab-grid">
+          
+          <!-- TAHAP 1: WITNESS -->
+          <div class="lab-card">
+            <div class="lab-step-header">
+              <span class="step-badge">Tahap 1</span>
+              <h4>Perhitungan Saksi (Witness)</h4>
+            </div>
+            <p class="lab-desc">Saksi dihitung secara lokal di browser WebAssembly dari 3 kunci gambar (input privat) tanpa bocor ke luar.</p>
+            
+            <div class="lab-actions">
+              <button type="button" id="btnLabUseSamples" class="btn-small-secondary">Gunakan Kunci Sampel</button>
+              <button type="button" id="btnLabGenWitness" class="btn-small-primary">1. Hitung Witness</button>
+            </div>
+
+            <div id="labWitnessOutput" class="code-block">
+              <span class="code-placeholder">Menunggu perhitungan saksi...</span>
+            </div>
+          </div>
+
+          <!-- TAHAP 2: PROOF -->
+          <div class="lab-card">
+            <div class="lab-step-header">
+              <span class="step-badge">Tahap 2</span>
+              <h4>Sintesis Bukti (Groth16 Proof)</h4>
+            </div>
+            <p class="lab-desc">Menghasilkan bukti ringkas 256-byte (titik kurva &pi;<sub>A</sub>, &pi;<sub>B</sub>, &pi;<sub>C</sub>) yang membuktikan kebenaran saksi.</p>
+
+            <div class="lab-actions">
+              <button type="button" id="btnLabGenProof" class="btn-small-primary" disabled>2. Sintesis Proof</button>
+              <button type="button" id="btnLabTamperProof" class="btn-small-danger" disabled title="Uji ubah 1 angka pada bukti untuk membuktikan verifier menolak">🧪 Rusak Bukti (Tamper)</button>
+              <button type="button" id="btnLabCopyProof" class="btn-small-secondary" disabled>Salin JSON</button>
+            </div>
+
+            <div id="labProofOutput" class="code-block">
+              <span class="code-placeholder">Menunggu sintesis bukti...</span>
+            </div>
+          </div>
+
+          <!-- TAHAP 3: VERIFIER -->
+          <div class="lab-card">
+            <div class="lab-step-header">
+              <span class="step-badge">Tahap 3</span>
+              <h4>Verifikasi Bukti (Verifier)</h4>
+            </div>
+            <p class="lab-desc">Memvalidasi persamaan bilinear pairing <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) = e(&alpha;, &beta;) + ...</code> menggunakan verification key publik.</p>
+
+            <div class="lab-actions">
+              <button type="button" id="btnLabRunVerify" class="btn-small-primary" disabled>3. Jalankan Verifier</button>
+            </div>
+
+            <div id="labVerifyOutput" class="verifier-result-box">
+              <span class="code-placeholder">Menunggu verifikasi bukti...</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
 
-    <!-- TAMPILAN SETELAH LOGIN BERHASIL -->
+    <!-- ================= TAMPILAN SUKSES LOGIN ================= -->
     <div id="successCard" class="card success-card" style="display: none;">
       <div class="success-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -177,12 +241,20 @@
         </div>
       </div>
 
+      <!-- Collapsible Proof Detail Receipt -->
+      <details class="proof-receipt-details">
+        <summary class="proof-receipt-summary">🔍 Lihat Rincian Bukti Kriptografi (Proof Receipt)</summary>
+        <div class="receipt-body">
+          <pre id="loginProofReceipt" class="receipt-pre"></pre>
+        </div>
+      </details>
+
       <button id="btnLogout" class="btn-secondary">Keluar (Logout)</button>
     </div>
 
-    <!-- Footer Sederhana -->
+    <!-- Footer -->
     <footer class="simple-footer">
-      Zero-Knowledge Proof 2FA • Circom 2.0 • SnarkJS
+      Zero-Knowledge Proof 2FA • Circom 2.0 • SnarkJS • BN254 Curve
     </footer>
   </div>
 

@@ -1,19 +1,22 @@
 /* ========================================================
-   ZK 2FA — CSS Sederhana, Modern, dan Ringan
+   ZK 2FA — CSS Profesional & Modern
    ======================================================== */
 
 :root {
-  --bg-color: #0f172a;
-  --card-bg: #1e293b;
-  --border-color: #334155;
+  --bg-color: #0b0f19;
+  --card-bg: #151d2f;
+  --border-color: #243049;
   --text-primary: #f8fafc;
   --text-muted: #94a3b8;
   --primary-color: #3b82f6;
   --primary-hover: #2563eb;
   --success-color: #10b981;
   --error-color: #ef4444;
-  --slot-bg: #0f172a;
+  --purple-color: #8b5cf6;
+  --purple-hover: #7c3aed;
+  --slot-bg: #0b0f19;
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
 * {
@@ -30,7 +33,7 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 24px 16px;
+  padding: 30px 16px;
   line-height: 1.5;
 }
 
@@ -40,6 +43,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  transition: max-width 0.3s ease;
+}
+
+.main-container.wide-mode {
+  max-width: 860px;
 }
 
 /* Header */
@@ -61,7 +69,7 @@ body {
 }
 
 .simple-header h1 {
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -78,17 +86,18 @@ body {
   border: 1px solid var(--border-color);
   border-radius: 16px;
   padding: 28px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.45);
 }
 
 /* Tab Navigasi */
 .tabs {
   display: flex;
-  background: #0f172a;
+  background: #0b0f19;
   padding: 4px;
   border-radius: 10px;
   margin-bottom: 24px;
   border: 1px solid var(--border-color);
+  gap: 4px;
 }
 
 .tab-btn {
@@ -97,18 +106,25 @@ body {
   border: none;
   color: var(--text-muted);
   font-family: inherit;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   font-weight: 600;
-  padding: 8px 12px;
+  padding: 9px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .tab-btn.active {
   background: var(--primary-color);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.tab-btn.btn-highlight.active {
+  background: var(--purple-color);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
 }
 
 /* Form Styles */
@@ -153,10 +169,10 @@ body {
 
 input[type="text"],
 input[type="password"] {
-  background: #0f172a;
+  background: #0b0f19;
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 11px 14px;
   color: var(--text-primary);
   font-family: inherit;
   font-size: 0.95rem;
@@ -279,7 +295,7 @@ input[type="password"]:focus {
   color: #6ee7b7;
 }
 
-/* Tombol */
+/* Tombol Utama */
 .btn-primary {
   background: var(--primary-color);
   color: #ffffff;
@@ -341,7 +357,201 @@ input[type="password"]:focus {
   to { transform: rotate(360deg); }
 }
 
-/* Tampilan Sukses (Dashboard Sederhana) */
+/* ========================================================
+   ZKP TEST LAB (WITNESS • PROOF • VERIFIER)
+   ======================================================== */
+
+.zk-lab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.lab-intro {
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.lab-intro h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin-bottom: 4px;
+}
+
+.lab-intro p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.lab-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lab-card {
+  background: #0e1626;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--primary-color);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.lab-card:nth-child(2) .step-badge {
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.lab-card:nth-child(3) .step-badge {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.lab-step-header h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lab-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.lab-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-small-primary {
+  background: var(--primary-color);
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-small-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.btn-small-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-small-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 6px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-small-danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.btn-small-primary:disabled,
+.btn-small-secondary:disabled,
+.btn-small-danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Monospace Code Viewer */
+.code-block {
+  background: #080c14;
+  border: 1px solid #1a2538;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #94a3b8;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.code-placeholder {
+  color: #475569;
+  font-style: italic;
+}
+
+/* Verifier Result Box */
+.verifier-result-box {
+  background: #080c14;
+  border: 1px solid #1a2538;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 0.82rem;
+  transition: all 0.3s ease;
+}
+
+.verifier-result-box.verified {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+.verifier-result-box.rejected {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+
+/* ========================================================
+   TAMPILAN SUKSES & PROOF RECEIPT
+   ======================================================== */
+
 .success-card {
   text-align: center;
   padding: 32px 24px;
@@ -382,7 +592,7 @@ input[type="password"]:focus {
 }
 
 .info-list {
-  background: #0f172a;
+  background: #0b0f19;
   border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px;
@@ -405,6 +615,45 @@ input[type="password"]:focus {
 
 .text-green {
   color: var(--success-color);
+}
+
+/* Collapsible Proof Receipt */
+.proof-receipt-details {
+  margin-top: 16px;
+  background: #0b0f19;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  text-align: left;
+  overflow: hidden;
+}
+
+.proof-receipt-summary {
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #93c5fd;
+  cursor: pointer;
+  user-select: none;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.proof-receipt-summary:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.receipt-body {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.receipt-pre {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  max-height: 180px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 /* Footer */
