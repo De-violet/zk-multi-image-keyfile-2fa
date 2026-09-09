@@ -100,7 +100,10 @@
         </div>
 
         <div class="form-group">
-          <label for="loginPassword">Password</label>
+          <div class="label-with-action">
+            <label for="loginPassword">Password</label>
+            <button type="button" id="btnShowRecovery" class="btn-text-link">Lupa Password? Pulihkan &rarr;</button>
+          </div>
           <input type="password" id="loginPassword" placeholder="Masukkan password Anda" required autocomplete="off">
         </div>
 
@@ -138,6 +141,62 @@
           <span class="btn-text">2. Masuk dengan ZK 2FA</span>
           <div class="spinner" style="display: none;"></div>
         </button>
+      </form>
+
+      <!-- ================= FORM PEMULIHAN AKUN (LUPA PASSWORD) ================= -->
+      <form id="formRecovery" class="form-content" style="display: none;">
+        <div class="form-step-badge">Pemulihan Akun via 2FA Zero-Knowledge</div>
+
+        <p class="input-hint" style="font-size: 0.8rem; color: #93c5fd; background: rgba(59, 130, 246, 0.08); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.2);">
+          <strong>Skenario Lupa Password:</strong> Buktikan identitas Anda dengan 3 foto kunci 2FA yang Anda miliki. Server akan memvalidasi bukti ZK tanpa pernah melihat foto Anda, lalu mengizinkan Anda membuat password baru.
+        </p>
+
+        <div class="form-group">
+          <label for="recoverUsername">Username Akun</label>
+          <input type="text" id="recoverUsername" placeholder="Masukkan username akun yang ingin dipulihkan" required autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label for="recoverNewPassword">Password Baru</label>
+          <input type="password" id="recoverNewPassword" placeholder="Buat password baru" required autocomplete="off">
+        </div>
+
+        <div class="form-group">
+          <label>Kunci 2FA (3 Foto yang Digunakan Saat Pendaftaran)</label>
+          <div class="keyfile-grid">
+            <div class="keyfile-slot" id="recoverSlot1">
+              <input type="file" id="recoverFile1" accept="image/*" class="file-input">
+              <div class="slot-preview" id="recoverPreview1">
+                <span class="slot-number">1</span>
+                <span class="slot-text">Pilih Foto 1</span>
+              </div>
+            </div>
+            <div class="keyfile-slot" id="recoverSlot2">
+              <input type="file" id="recoverFile2" accept="image/*" class="file-input">
+              <div class="slot-preview" id="recoverPreview2">
+                <span class="slot-number">2</span>
+                <span class="slot-text">Pilih Foto 2</span>
+              </div>
+            </div>
+            <div class="keyfile-slot" id="recoverSlot3">
+              <input type="file" id="recoverFile3" accept="image/*" class="file-input">
+              <div class="slot-preview" id="recoverPreview3">
+                <span class="slot-number">3</span>
+                <span class="slot-text">Pilih Foto 3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="recoverStatus" class="status-box" style="display: none;"></div>
+
+        <div style="display: flex; gap: 8px;">
+          <button type="submit" id="btnRecoverSubmit" class="btn-primary" style="flex: 2;">
+            <span class="btn-text">Buktikan via ZKP & Reset Password</span>
+            <div class="spinner" style="display: none;"></div>
+          </button>
+          <button type="button" id="btnCancelRecovery" class="btn-secondary" style="flex: 1; margin-top: 4px;">Batal</button>
+        </div>
       </form>
 
       <!-- ================= 3. VERIFIER ================= -->

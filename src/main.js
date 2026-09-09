@@ -1,12 +1,13 @@
 import { hashFileDeterministic } from './crypto/fileHash.js';
-import { deriveSaltFromPassphrase, generateAutoSalt } from './crypto/saltManager.js';
+import { generateAutoSalt } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof } from './crypto/zkProver.js';
 
-// State aplikasi murni in-memory (tanpa penyimpanan localStorage)
+// State aplikasi in-memory murni (tanpa localStorage)
 const state = {
   regFiles: [null, null, null],
   loginFiles: [null, null, null],
+  recoverFiles: [null, null, null],
   labFiles: [null, null, null],
 
   // State Verifier Lab
@@ -39,6 +40,8 @@ function setupSlot(mode, index) {
   const input = document.getElementById(`${mode}File${index + 1}`);
   const preview = document.getElementById(`${mode}Preview${index + 1}`);
 
+  if (!slot || !input) return;
+
   slot.addEventListener('click', () => input.click());
 
   input.addEventListener('change', (e) => {
@@ -49,6 +52,8 @@ function setupSlot(mode, index) {
       state.regFiles[index] = file;
     } else if (mode === 'login') {
       state.loginFiles[index] = file;
+    } else if (mode === 'recover') {
+      state.recoverFiles[index] = file;
     } else if (mode === 'lab') {
       state.labFiles[index] = file;
       updateLabFileDetails();
@@ -84,6 +89,7 @@ function resetSlots(mode) {
   });
   if (mode === 'reg') state.regFiles = [null, null, null];
   if (mode === 'login') state.loginFiles = [null, null, null];
+  if (mode === 'recover') state.recoverFiles = [null, null, null];
   if (mode === 'lab') state.labFiles = [null, null, null];
 }
 
@@ -127,10 +133,11 @@ function resetLabPipeline() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Pasang slot file untuk ketiga mode
+  // Pasang slot file untuk semua mode
   [0, 1, 2].forEach(i => {
     setupSlot('reg', i);
     setupSlot('login', i);
+    setupSlot('recover', i);
     setupSlot('lab', i);
   });
 
@@ -141,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const formRegister = document.getElementById('formRegister');
   const formLogin = document.getElementById('formLogin');
+  const formRecovery = document.getElementById('formRecovery');
   const sectionVerifier = document.getElementById('sectionVerifier');
   const authCard = document.getElementById('authCard');
   const successCard = document.getElementById('successCard');
@@ -157,10 +165,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formRegister.style.display = 'flex';
     formLogin.style.display = 'none';
+    formRecovery.style.display = 'none';
     sectionVerifier.style.display = 'none';
 
     hideStatus('regStatus');
     hideStatus('loginStatus');
+    hideStatus('recoverStatus');
   }
 
   // Tab 2: Login Akun
@@ -175,10 +185,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     formLogin.style.display = 'flex';
     formRegister.style.display = 'none';
+    formRecovery.style.display = 'none';
     sectionVerifier.style.display = 'none';
 
     hideStatus('regStatus');
     hideStatus('loginStatus');
+    hideStatus('recoverStatus');
   }
 
   // Tab 3: Verifier
@@ -194,17 +206,35 @@ document.addEventListener('DOMContentLoaded', () => {
     sectionVerifier.style.display = 'flex';
     formRegister.style.display = 'none';
     formLogin.style.display = 'none';
+    formRecovery.style.display = 'none';
   }
 
   tabBtnRegister.addEventListener('click', showRegisterTab);
   tabBtnLogin.addEventListener('click', showLoginTab);
   tabBtnVerifier.addEventListener('click', showVerifierTab);
 
+  // Navigasi Mode Pemulihan Akun (Lupa Password)
+  document.getElementById('btnShowRecovery').addEventListener('click', () => {
+    formLogin.style.display = 'none';
+    formRecovery.style.display = 'flex';
+    hideStatus('recoverStatus');
+    const loginUserVal = document.getElementById('loginUsername').value.trim();
+    if (loginUserVal) {
+      document.getElementById('recoverUsername').value = loginUserVal;
+    }
+  });
+
+  document.getElementById('btnCancelRecovery').addEventListener('click', () => {
+    formRecovery.style.display = 'none';
+    formLogin.style.display = 'flex';
+    hideStatus('recoverStatus');
+  });
+
   // Default: Buka langkah 1 (Daftar Akun)
   showRegisterTab();
 
   // ==========================================
-  // 1. DAFTAR AKUN
+  // 1. DAFTAR AKUN (MENGIZINKAN OVERWRITE DEMO)
   // ==========================================
   formRegister.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -235,8 +265,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
-      // Turunkan salt secara deterministik dari passphrase & username (tanpa simpan di localStorage)
-      const saltObj = await deriveSaltFromPassphrase(password, username);
+      // Hasilkan salt acak CSPRNG untuk komitmen 2FA
+      const saltObj = generateAutoSalt();
 
       const { rootCommitment } = await computeHierarchicalCommitment(
         h1.fieldElement,
@@ -245,14 +275,15 @@ document.addEventListener('DOMContentLoaded', () => {
         saltObj.fieldElement
       );
 
-      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server (hanya mengirim Root Commitment, foto tetap privat)...');
+      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server...');
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
           password,
-          rootCommitment
+          rootCommitment,
+          salt2fa: saltObj.fieldElement
         })
       });
 
@@ -321,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const { sessionNonce, rootCommitment } = challengeData;
+      const { sessionNonce, rootCommitment, salt2fa } = challengeData;
 
       btnText.textContent = 'Menghitung Bukti ZK...';
       showStatus('loginStatus', 'info', '2/3 Menghasilkan saksi & bukti Groth16 di WebAssembly lokal...');
@@ -332,14 +363,11 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
-      // Turunkan salt secara deterministik dari password & username murni saat login
-      const saltObj = await deriveSaltFromPassphrase(password, username);
-
       const zkpResult = await generateZkProof({
         h1: h1.fieldElement,
         h2: h2.fieldElement,
         h3: h3.fieldElement,
-        salt: saltObj.fieldElement,
+        salt: salt2fa || '0',
         rootCommitment: rootCommitment,
         sessionNonce: sessionNonce
       });
@@ -371,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const totalDuration = Math.round(performance.now() - startTime);
 
-      // Simpan bukti terakhir agar dapat langsung diverifikasi di tab 3
       state.labProof = zkpResult.proof;
       state.labPublicSignals = [
         zkpResult.sessionAuthToken,
@@ -379,7 +406,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sessionNonce
       ];
 
-      // Beralih ke layar sukses
       authCard.style.display = 'none';
       successCard.style.display = 'block';
 
@@ -413,12 +439,121 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Tombol dari Layar Sukses menuju Tab 3: Verifier
+  // ==========================================
+  // SKENARIO LUPA PASSWORD (PEMULIHAN VIA 2FA ZKP)
+  // ==========================================
+  formRecovery.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideStatus('recoverStatus');
+
+    const username = document.getElementById('recoverUsername').value.trim();
+    const newPassword = document.getElementById('recoverNewPassword').value;
+    const [f1, f2, f3] = state.recoverFiles;
+
+    if (!username || !newPassword) {
+      showStatus('recoverStatus', 'error', 'Mohon isi username dan password baru.');
+      return;
+    }
+
+    if (!f1 || !f2 || !f3) {
+      showStatus('recoverStatus', 'error', 'Pilih 3 foto kunci 2FA yang Anda miliki untuk membuktikan identitas.');
+      return;
+    }
+
+    const btn = document.getElementById('btnRecoverSubmit');
+    const btnText = btn.querySelector('.btn-text');
+    const spinner = btn.querySelector('.spinner');
+
+    btn.disabled = true;
+    spinner.style.display = 'block';
+
+    try {
+      btnText.textContent = 'Meminta Challenge...';
+      showStatus('recoverStatus', 'info', '1/3 Meminta token sesi pemulihan untuk @' + username + '...');
+
+      const chalRes = await fetch('/api/auth/recover-challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username })
+      });
+
+      const chalData = await chalRes.json();
+      if (!chalRes.ok) {
+        showStatus('recoverStatus', 'error', chalData.error || 'Akun tidak ditemukan.');
+        return;
+      }
+
+      const { sessionNonce, rootCommitment, salt2fa } = chalData;
+
+      btnText.textContent = 'Membuat Bukti ZK...';
+      showStatus('recoverStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
+
+      const [h1, h2, h3] = await Promise.all([
+        hashFileDeterministic(f1),
+        hashFileDeterministic(f2),
+        hashFileDeterministic(f3)
+      ]);
+
+      const zkpResult = await generateZkProof({
+        h1: h1.fieldElement,
+        h2: h2.fieldElement,
+        h3: h3.fieldElement,
+        salt: salt2fa || '0',
+        rootCommitment: rootCommitment,
+        sessionNonce: sessionNonce
+      });
+
+      if (!zkpResult.success) {
+        showStatus('recoverStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini! Pemulihan dibatalkan.');
+        return;
+      }
+
+      btnText.textContent = 'Mereset Password...';
+      showStatus('recoverStatus', 'info', '3/3 Mengirim bukti ZKP ke server untuk mereset password...');
+
+      const resetRes = await fetch('/api/auth/recover-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username,
+          sessionNonce,
+          sessionAuthToken: zkpResult.sessionAuthToken,
+          proof: zkpResult.proof,
+          newPassword
+        })
+      });
+
+      const resetData = await resetRes.json();
+      if (!resetRes.ok) {
+        showStatus('recoverStatus', 'error', resetData.error || 'Gagal mereset password.');
+        return;
+      }
+
+      showStatus('recoverStatus', 'success', '✓ Sukses! Password berhasil direset via otentikasi 3 foto 2FA ZKP! Mengalihkan ke Login...');
+
+      setTimeout(() => {
+        formRecovery.style.display = 'none';
+        formLogin.style.display = 'flex';
+        document.getElementById('loginUsername').value = username;
+        document.getElementById('loginPassword').value = '';
+        showStatus('loginStatus', 'success', 'Password baru berhasil aktif! Silakan login menggunakan password baru dan 3 foto kunci Anda.');
+      }, 1500);
+
+    } catch (err) {
+      showStatus('recoverStatus', 'error', 'Kesalahan: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'Buktikan via ZKP & Reset Password';
+      spinner.style.display = 'none';
+    }
+  });
+
+  // Tombol ke Verifier dari Layar Sukses
   document.getElementById('btnGoToVerifier').addEventListener('click', () => {
     showVerifierTab();
   });
 
-  // LOGOUT (Keluar)
+  // Logout
   document.getElementById('btnLogout').addEventListener('click', () => {
     successCard.style.display = 'none';
     authCard.style.display = 'block';
