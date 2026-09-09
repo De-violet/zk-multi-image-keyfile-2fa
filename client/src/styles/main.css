@@ -146,25 +146,11 @@ body {
   color: var(--text-muted);
 }
 
-.label-with-action {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.btn-text-link {
-  background: none;
-  border: none;
-  color: var(--primary-color);
-  font-size: 0.78rem;
-  cursor: pointer;
-  font-family: inherit;
-  text-decoration: underline;
-  padding: 0;
-}
-
-.btn-text-link:hover {
-  color: var(--primary-hover);
+.input-hint {
+  font-size: 0.76rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin-top: -2px;
 }
 
 input[type="text"],
@@ -198,7 +184,7 @@ input[type="password"]:focus {
   background: var(--slot-bg);
   border: 1.5px dashed var(--border-color);
   border-radius: 10px;
-  height: 90px;
+  height: 95px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -387,6 +373,34 @@ input[type="password"]:focus {
   line-height: 1.45;
 }
 
+.lab-photo-picker {
+  background: #0e1626;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-photo-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.lab-file-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  background: #080c14;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #1a2538;
+}
+
 .lab-grid {
   display: flex;
   flex-direction: column;
@@ -454,8 +468,8 @@ input[type="password"]:focus {
   color: #ffffff;
   border: none;
   border-radius: 6px;
-  padding: 7px 12px;
-  font-size: 0.8rem;
+  padding: 8px 14px;
+  font-size: 0.82rem;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -471,8 +485,8 @@ input[type="password"]:focus {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  padding: 7px 12px;
-  font-size: 0.8rem;
+  padding: 8px 14px;
+  font-size: 0.82rem;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.2s;
@@ -487,8 +501,8 @@ input[type="password"]:focus {
   color: #fca5a5;
   border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: 6px;
-  padding: 7px 12px;
-  font-size: 0.8rem;
+  padding: 8px 14px;
+  font-size: 0.82rem;
   font-family: inherit;
   font-weight: 500;
   cursor: pointer;
@@ -546,6 +560,16 @@ input[type="password"]:focus {
   background: rgba(239, 68, 68, 0.12);
   border-color: rgba(239, 68, 68, 0.4);
   color: #fca5a5;
+}
+
+.lab-experiment-tip {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px dashed rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.78rem;
+  color: #93c5fd;
+  line-height: 1.4;
 }
 
 /* ========================================================
