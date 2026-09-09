@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>ZK 2FA — Zero-Knowledge Multi-Image Keyfile</title>
   
   <!-- Font Modern & Ringan -->
@@ -10,7 +13,77 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="./src/styles/main.css">
+  <link rel="stylesheet" href="./src/styles/main.css?v=mono2">
+  
+  <style>
+    /* Monokrom Murni (Hitam • Putih • Abu-Abu) */
+    :root {
+      --bg-color: #09090b !important;
+      --card-bg: #121215 !important;
+      --border-color: #27272a !important;
+      --border-light: #3f3f46 !important;
+      --text-primary: #ffffff !important;
+      --text-muted: #a1a1aa !important;
+      --text-subtle: #71717a !important;
+      --primary-color: #ffffff !important;
+      --primary-hover: #e4e4e7 !important;
+      --primary-inverse: #09090b !important;
+      --slot-bg: #09090b !important;
+      --panel-bg: #18181b !important;
+      --purple-color: #ffffff !important;
+      --success-color: #ffffff !important;
+      --error-color: #a1a1aa !important;
+    }
+    body {
+      background-color: #09090b !important;
+      color: #ffffff !important;
+    }
+    .card {
+      background-color: #121215 !important;
+      border-color: #27272a !important;
+    }
+    .tab-btn.active, .tab-btn.btn-highlight.active {
+      background: #ffffff !important;
+      color: #09090b !important;
+      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.15) !important;
+    }
+    .btn-primary {
+      background: #ffffff !important;
+      color: #09090b !important;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #e4e4e7 !important;
+    }
+    .form-step-badge {
+      background: #18181b !important;
+      color: #ffffff !important;
+      border-color: #3f3f46 !important;
+    }
+    .logo-icon {
+      background: #18181b !important;
+      border-color: #3f3f46 !important;
+      color: #ffffff !important;
+    }
+    .lab-intro {
+      background: #18181b !important;
+      border-color: #27272a !important;
+    }
+    .lab-intro h3 {
+      color: #ffffff !important;
+    }
+    .step-badge {
+      background: #27272a !important;
+      color: #ffffff !important;
+      border-color: #3f3f46 !important;
+    }
+    .btn-small-primary {
+      background: #ffffff !important;
+      color: #09090b !important;
+    }
+    .slot-img-preview {
+      filter: grayscale(100%) !important;
+    }
+  </style>
   
   <!-- Pustaka Kriptografi ZK Lokal -->
   <script src="./public/vendor/poseidon.bundle.js"></script>
@@ -319,6 +392,6 @@
     </footer>
   </div>
 
-  <script type="module" src="./src/main.js"></script>
+  <script type="module" src="./src/main.js?v=mono2"></script>
 </body>
 </html>
