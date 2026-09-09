@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
-      const rootCommitment = await computeHierarchicalCommitment(
+      const { rootCommitment } = await computeHierarchicalCommitment(
         h1.fieldElement,
         h2.fieldElement,
         h3.fieldElement,
@@ -432,15 +432,19 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
-      state.labRootCommitment = await computeHierarchicalCommitment(
+      const commitmentResult = await computeHierarchicalCommitment(
         h1.fieldElement,
         h2.fieldElement,
         h3.fieldElement,
         state.labSalt.fieldElement
       );
+      state.labRootCommitment = commitmentResult.rootCommitment;
 
-      state.labNonce = '0x' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
+      // Hasilkan nonce acak 128-bit modulo BN254 field
+      const randBytes = crypto.getRandomValues(new Uint8Array(16));
+      const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+      state.labNonce = (BigInt('0x' + randHex) % BN254_R).toString();
 
       state.labWitnessInputs = {
         h1: h1.fieldElement,
