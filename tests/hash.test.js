@@ -1,0 +1,57 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'crypto';
+import { SNARK_SCALAR_FIELD } from '../server/src/nonceManager.js';
+import { getPoseidon, computeHierarchicalCommitment, computeSessionAuthToken } from '../client/src/crypto/poseidon.js';
+import { deriveSaltFromPassphrase, generateAutoSalt } from '../client/src/crypto/saltManager.js';
+
+test('1. Determinisme Reduksi SHA-256 ke BN254 Scalar Field', async () => {
+  const sampleData = Buffer.from('RAW_PIXEL_DATA_RGB_ENTROPY_SAMPLE_1');
+  const sha256Hex = crypto.createHash('sha256').update(sampleData).digest('hex');
+  
+  const bigIntVal = BigInt('0x' + sha256Hex);
+  const fieldElement = bigIntVal % SNARK_SCALAR_FIELD;
+
+  assert.ok(fieldElement >= 0n, 'Field element harus non-negatif');
+  assert.ok(fieldElement < SNARK_SCALAR_FIELD, 'Field element harus lebih kecil dari scalar field BN254');
+  
+  // Memastikan komputasi berulang menghasilkan nilai yang 100% identik
+  const repeatFieldElement = BigInt('0x' + crypto.createHash('sha256').update(sampleData).digest('hex')) % SNARK_SCALAR_FIELD;
+  assert.equal(fieldElement, repeatFieldElement, 'Reduksi modulo harus 100% deterministik');
+});
+
+test('2. Entropi Auto-Salt & KDF Passphrase PBKDF2 (100.000 iterasi)', async () => {
+  const autoSalt = generateAutoSalt();
+  assert.ok(autoSalt.rawHex.length === 64, 'Panjang hex salt auto-generate harus 64 karakter (32 byte / 256 bit)');
+  assert.ok(BigInt(autoSalt.fieldElement) < SNARK_SCALAR_FIELD, 'Salt harus valid dalam domain BN254');
+
+  const username = 'alice_cyber';
+  const passphrase = 'UltraSecurePin9876!';
+  const kdf1 = await deriveSaltFromPassphrase(passphrase, username);
+  const kdf2 = await deriveSaltFromPassphrase(passphrase, username);
+
+  assert.equal(kdf1.fieldElement, kdf2.fieldElement, 'KDF PBKDF2 harus deterministik untuk input dan username yang sama');
+
+  const kdfDifferentUser = await deriveSaltFromPassphrase(passphrase, 'bob_cyber');
+  assert.notEqual(kdf1.fieldElement, kdfDifferentUser.fieldElement, 'Salt KDF harus terikat dengan username');
+});
+
+test('3. Hierarki Hashing Poseidon (Image Key, Root Commitment, Session Token)', async () => {
+  const h1 = (BigInt('0x' + crypto.createHash('sha256').update('image1').digest('hex')) % SNARK_SCALAR_FIELD).toString();
+  const h2 = (BigInt('0x' + crypto.createHash('sha256').update('image2').digest('hex')) % SNARK_SCALAR_FIELD).toString();
+  const h3 = (BigInt('0x' + crypto.createHash('sha256').update('image3').digest('hex')) % SNARK_SCALAR_FIELD).toString();
+  const salt = '12345678901234567890';
+  const sessionNonce = '998877665544332211';
+
+  const { masterKey, rootCommitment } = await computeHierarchicalCommitment(h1, h2, h3, salt);
+  assert.ok(masterKey, 'Master key harus terhitung');
+  assert.ok(rootCommitment, 'Root commitment harus terhitung');
+
+  const sessionAuthToken = await computeSessionAuthToken(masterKey, sessionNonce);
+  assert.ok(sessionAuthToken, 'Session Auth Token harus terhitung');
+
+  // Buktikan zero-noise tolerance: 1 bit perubahan pada h1 merubah total root commitment
+  const h1Tampered = (BigInt(h1) + 1n).toString();
+  const tampered = await computeHierarchicalCommitment(h1Tampered, h2, h3, salt);
+  assert.notEqual(rootCommitment, tampered.rootCommitment, '1 bit perubahan pada gambar wajib mengubah total root commitment (Zero-Noise Tolerance)');
+});

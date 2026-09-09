@@ -1,0 +1,36 @@
+{
+  "name": "zk-multi-image-keyfile-2fa",
+  "version": "1.0.0",
+  "description": "Zero-Knowledge Multi-Image Keyfile 2FA with Circom, SnarkJS, Groth16, and Poseidon",
+  "main": "server/src/app.js",
+  "type": "module",
+  "scripts": {
+    "compile:circuit": "bash circuits/scripts/compile.sh",
+    "start": "node server/src/app.js",
+    "dev": "node server/src/app.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "test:circuit": "node --test tests/circuit.test.js",
+    "test:hash": "node --test tests/hash.test.js",
+    "test:e2e": "node --test tests/e2e.test.js"
+  },
+  "keywords": [
+    "zero-knowledge",
+    "zkp",
+    "groth16",
+    "circom",
+    "poseidon",
+    "2fa",
+    "snarkjs",
+    "keyfile"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "snarkjs": "^0.7.5"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,9 @@
+{
+  "cybernaut_01": {
+    "username": "cybernaut_01",
+    "passwordHash": "0997c9dcfefc4dc1a3bce23dbfefee2a8936847594bc9fa9424bbd16327352d5",
+    "passwordSalt": "ca467ad3debf7b4e024263652e96ebcf",
+    "rootCommitment": "6426693243100089086974931834368105507216609661985372626254917015336731677024",
+    "createdAt": "2026-09-09T14:51:04.412Z"
+  }
+}
