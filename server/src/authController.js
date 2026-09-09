@@ -53,6 +53,43 @@ export const authController = {
   },
 
   /**
+   * Login Standar (Username & Password)
+   * Login harian cepat tanpa perlu upload 3 gambar kunci 2FA
+   */
+  async login(req, res) {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: 'Diperlukan username dan password.' });
+      }
+
+      const user = db.getUser(username);
+      if (!user) {
+        return res.status(404).json({ error: 'Akun tidak ditemukan. Silakan daftar terlebih dahulu.' });
+      }
+
+      const passwordHash = hashPassword(password, user.passwordSalt);
+      if (user.passwordHash !== passwordHash) {
+        return res.status(401).json({ error: 'Password salah. Gunakan opsi "Lupa Password" jika Anda lupa.' });
+      }
+
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      return res.json({
+        success: true,
+        message: 'Login berhasil!',
+        sessionToken,
+        user: {
+          username: user.username,
+          authenticatedAt: new Date().toISOString()
+        }
+      });
+    } catch (err) {
+      console.error('[Login Error]:', err);
+      return res.status(500).json({ error: 'Internal server error saat login.' });
+    }
+  },
+
+  /**
    * Permintaan Tantangan 2FA (Fase 2)
    * Validasi password F1 -> terbitkan sessionNonce (TTL 60 detik)
    */
