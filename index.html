@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZK 2FA — Zero-Knowledge Multi-Image Keyfile</title>
+  
+  <!-- Font Modern & Ringan -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/src/styles/main.css">
+  
+  <!-- Pustaka Kriptografi ZK Lokal -->
+  <script src="/public/vendor/poseidon.bundle.js"></script>
+  <script src="/public/vendor/snarkjs.min.js"></script>
+</head>
+<body>
+
+  <div class="main-container">
+    <!-- Header Aplikasi Sederhana -->
+    <header class="simple-header">
+      <div class="logo-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>
+      </div>
+      <h1>Zero-Knowledge 2FA</h1>
+      <p class="subtitle">Otentikasi 2-Faktor berbasis 3 Kunci Gambar tanpa mengirim gambar ke server</p>
+    </header>
+
+    <!-- Kartu Utama Otentikasi -->
+    <div id="authCard" class="card">
+      <!-- Tab Navigasi Sederhana -->
+      <div class="tabs">
+        <button id="tabBtnLogin" class="tab-btn active">Masuk</button>
+        <button id="tabBtnRegister" class="tab-btn">Daftar</button>
+      </div>
+
+      <!-- FORM LOGIN -->
+      <form id="formLogin" class="form-content">
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" placeholder="Masukkan username" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Masukkan password" required autocomplete="current-password">
+        </div>
+
+        <div class="form-group">
+          <label>Kunci 2FA (Pilih 3 File Gambar yang Sama Saat Pendaftaran)</label>
+          <div class="keyfile-grid">
+            <!-- Slot 1 -->
+            <div class="keyfile-slot" id="loginSlot1">
+              <input type="file" id="loginFile1" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview1">
+                <span class="slot-number">1</span>
+                <span class="slot-text">Pilih Gambar 1</span>
+              </div>
+            </div>
+            <!-- Slot 2 -->
+            <div class="keyfile-slot" id="loginSlot2">
+              <input type="file" id="loginFile2" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview2">
+                <span class="slot-number">2</span>
+                <span class="slot-text">Pilih Gambar 2</span>
+              </div>
+            </div>
+            <!-- Slot 3 -->
+            <div class="keyfile-slot" id="loginSlot3">
+              <input type="file" id="loginFile3" accept="image/*" class="file-input">
+              <div class="slot-preview" id="loginPreview3">
+                <span class="slot-number">3</span>
+                <span class="slot-text">Pilih Gambar 3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="loginStatus" class="status-box" style="display: none;"></div>
+
+        <button type="submit" id="btnLoginSubmit" class="btn-primary">
+          <span class="btn-text">Masuk</span>
+          <div class="spinner" style="display: none;"></div>
+        </button>
+      </form>
+
+      <!-- FORM REGISTER -->
+      <form id="formRegister" class="form-content" style="display: none;">
+        <div class="form-group">
+          <label for="regUsername">Username Baru</label>
+          <input type="text" id="regUsername" placeholder="Pilih username" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="regPassword">Password</label>
+          <input type="password" id="regPassword" placeholder="Buat password" required autocomplete="new-password">
+        </div>
+
+        <div class="form-group">
+          <div class="label-with-action">
+            <label>Kunci 2FA (3 File Gambar)</label>
+            <button type="button" id="btnGenSamples" class="btn-text-link">📥 Unduh Kunci Contoh</button>
+          </div>
+          <div class="keyfile-grid">
+            <!-- Slot 1 -->
+            <div class="keyfile-slot" id="regSlot1">
+              <input type="file" id="regFile1" accept="image/*" class="file-input">
+              <div class="slot-preview" id="regPreview1">
+                <span class="slot-number">1</span>
+                <span class="slot-text">Pilih Gambar 1</span>
+              </div>
+            </div>
+            <!-- Slot 2 -->
+            <div class="keyfile-slot" id="regSlot2">
+              <input type="file" id="regFile2" accept="image/*" class="file-input">
+              <div class="slot-preview" id="regPreview2">
+                <span class="slot-number">2</span>
+                <span class="slot-text">Pilih Gambar 2</span>
+              </div>
+            </div>
+            <!-- Slot 3 -->
+            <div class="keyfile-slot" id="regSlot3">
+              <input type="file" id="regFile3" accept="image/*" class="file-input">
+              <div class="slot-preview" id="regPreview3">
+                <span class="slot-number">3</span>
+                <span class="slot-text">Pilih Gambar 3</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="regStatus" class="status-box" style="display: none;"></div>
+
+        <button type="submit" id="btnRegSubmit" class="btn-primary">
+          <span class="btn-text">Daftarkan Akun</span>
+          <div class="spinner" style="display: none;"></div>
+        </button>
+      </form>
+    </div>
+
+    <!-- TAMPILAN SETELAH LOGIN BERHASIL -->
+    <div id="successCard" class="card success-card" style="display: none;">
+      <div class="success-icon">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+      </div>
+
+      <h2>Login Berhasil!</h2>
+      <p class="welcome-text">Selamat datang, <strong id="loggedInUser">Pengguna</strong></p>
+
+      <div class="security-badge">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+        </svg>
+        <span>Terotentikasi via Zero-Knowledge Proof (Groth16)</span>
+      </div>
+
+      <div class="info-list">
+        <div class="info-item">
+          <span>Metode Verifikasi</span>
+          <strong>3 Kunci Gambar + Poseidon ZKP</strong>
+        </div>
+        <div class="info-item">
+          <span>Durasi Verifikasi</span>
+          <strong id="verifyTime">~ ms</strong>
+        </div>
+        <div class="info-item">
+          <span>Privasi Gambar</span>
+          <strong class="text-green">100% Tidak Pernah Dikirim ke Server</strong>
+        </div>
+      </div>
+
+      <button id="btnLogout" class="btn-secondary">Keluar (Logout)</button>
+    </div>
+
+    <!-- Footer Sederhana -->
+    <footer class="simple-footer">
+      Zero-Knowledge Proof 2FA • Circom 2.0 • SnarkJS
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
