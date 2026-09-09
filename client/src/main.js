@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoginTab();
         document.getElementById('loginUsername').value = username;
         document.getElementById('loginPassword').value = '';
-        showStatus('loginStatus', 'info', `Akun "${username}" siap. Masukkan password dan 3 foto kunci yang sama untuk masuk.`);
+        showStatus('loginStatus', 'info', `Akun "${username}" siap. Silakan masukkan password Anda untuk masuk.`);
       }, 1200);
 
     } catch (err) {
