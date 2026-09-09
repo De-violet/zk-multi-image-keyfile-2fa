@@ -1,6 +1,7 @@
 /**
  * Groth16 Prover di sisi klien (Browser)
  * Memanfaatkan WebAssembly dan SnarkJS untuk menghasilkan bukti dalam waktu < 1 detik
+ * Mendukung otomatisasi path untuk Localhost dan GitHub Pages
  */
 
 let snarkjsInstance = null;
@@ -10,7 +11,7 @@ async function getSnarkJS() {
     if (typeof window !== 'undefined' && window.snarkjs) {
       snarkjsInstance = window.snarkjs;
     } else {
-      const snark = await import('/vendor/snarkjs/build/snarkjs.min.js').catch(async () => {
+      const snark = await import('../public/vendor/snarkjs.min.js').catch(async () => {
         return await import('snarkjs');
       });
       snarkjsInstance = snark.default || snark;
@@ -19,17 +20,30 @@ async function getSnarkJS() {
   return snarkjsInstance;
 }
 
+// Resolver path artefak sirkuit dinamis (Localhost vs GitHub Pages)
+export async function resolveArtifactPath(filename) {
+  const defaultPath = './public/zk/' + filename;
+  try {
+    const res = await fetch(defaultPath, { method: 'HEAD' });
+    if (res.ok) return defaultPath;
+  } catch (e) {}
+
+  const fallbacks = [
+    '/public/zk/' + filename,
+    '/zk/' + filename,
+    '/zk/MultiImageKeyfile2FA_js/' + filename
+  ];
+  for (const p of fallbacks) {
+    try {
+      const res = await fetch(p, { method: 'HEAD' });
+      if (res.ok) return p;
+    } catch (e) {}
+  }
+  return defaultPath;
+}
+
 /**
  * Menghasilkan Groth16 ZK-Proof lokal
- * @param {object} params
- * @param {string} params.h1 - Field element hash gambar 1
- * @param {string} params.h2 - Field element hash gambar 2
- * @param {string} params.h3 - Field element hash gambar 3
- * @param {string} params.salt - Field element Secret Salt
- * @param {string} params.rootCommitment - Root commitment publik terdaftar
- * @param {string} params.sessionNonce - Nonce publik aktif dari server
- * @param {string} [params.wasmPath] - URL/path ke MultiImageKeyfile2FA.wasm
- * @param {string} [params.zkeyPath] - URL/path ke circuit_final.zkey
  */
 export async function generateZkProof({
   h1,
@@ -38,8 +52,8 @@ export async function generateZkProof({
   salt,
   rootCommitment,
   sessionNonce,
-  wasmPath = '/zk/MultiImageKeyfile2FA_js/MultiImageKeyfile2FA.wasm',
-  zkeyPath = '/zk/circuit_final.zkey'
+  wasmPath,
+  zkeyPath
 }) {
   const snarkjs = await getSnarkJS();
   const startTime = performance.now();
@@ -53,29 +67,27 @@ export async function generateZkProof({
     sessionNonce: sessionNonce.toString()
   };
 
+  const finalWasm = wasmPath || (await resolveArtifactPath('MultiImageKeyfile2FA.wasm'));
+  const finalZkey = zkeyPath || (await resolveArtifactPath('circuit_final.zkey'));
+
   try {
     const { proof, publicSignals } = await snarkjs.groth16.fullProve(
       circuitInputs,
-      wasmPath,
-      zkeyPath
+      finalWasm,
+      finalZkey
     );
 
-    const durationMs = parseFloat((performance.now() - startTime).toFixed(2));
-
-    // publicSignals[0] adalah output sessionAuthToken
-    // publicSignals[1] adalah rootCommitment
-    // publicSignals[2] adalah sessionNonce
-    const sessionAuthToken = publicSignals[0];
+    const durationMs = Math.round(performance.now() - startTime);
 
     return {
       success: true,
       proof,
       publicSignals,
-      sessionAuthToken,
+      sessionAuthToken: publicSignals[0],
       durationMs
     };
   } catch (err) {
-    const durationMs = parseFloat((performance.now() - startTime).toFixed(2));
+    const durationMs = Math.round(performance.now() - startTime);
     return {
       success: false,
       error: err.message,
@@ -83,3 +95,14 @@ export async function generateZkProof({
     };
   }
 }
+
+/**
+ * Memverifikasi Groth16 ZK-Proof secara lokal di browser
+ */
+export async function verifyZkProof(vKey, publicSignals, proof) {
+  const snarkjs = await getSnarkJS();
+  return await snarkjs.groth16.verify(vKey, publicSignals, proof);
+}
+
+export { getSnarkJS };
+

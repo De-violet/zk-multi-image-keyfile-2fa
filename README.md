@@ -1,5 +1,12 @@
 # 🔐 Zero-Knowledge Multi-Image Keyfile 2FA
 
+[![Live Web Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?style=for-the-badge&logo=github)](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)
+
+**🌐 Coba Demo Langsung (Gratis di GitHub Pages):**  
+👉 **[https://de-violet.github.io/zk-multi-image-keyfile-2fa/](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)**
+
+---
+
 Sistem Otentikasi dan Pemulihan Akun berbasis **Zero-Knowledge Proofs (Groth16 zk-SNARKs & Circom 2.0)** menggunakan 3 berkas gambar pribadi sebagai kunci kriptografis.
 
 Foto Anda **100% tidak pernah diunggah atau disimpan di server**. Browser WebAssembly menghitung bukti matematika secara lokal, sehingga server hanya memvalidasi keaslian bukti tanpa pernah mengetahui isi fotonya.
