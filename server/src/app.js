@@ -29,6 +29,8 @@ app.use('/zk', express.static(zkArtifactsPath));
 app.post('/api/auth/register', authController.register);
 app.post('/api/auth/challenge', authController.challenge);
 app.post('/api/auth/verify-2fa', authController.verify2fa);
+app.post('/api/auth/recover-challenge', authController.recoverChallenge);
+app.post('/api/auth/recover-reset', authController.recoverReset);
 app.get('/api/auth/user/:username', authController.getUserStatus);
 
 // Health check endpoint

@@ -42,13 +42,14 @@ export const db = {
     return !!users[username.toLowerCase()];
   },
 
-  saveUser({ username, passwordHash, passwordSalt, rootCommitment }) {
+  saveUser({ username, passwordHash, passwordSalt, rootCommitment, salt2fa }) {
     const key = username.toLowerCase();
     users[key] = {
       username: key,
       passwordHash,
       passwordSalt: passwordSalt || null,
       rootCommitment: rootCommitment.toString(),
+      salt2fa: salt2fa ? salt2fa.toString() : (users[key]?.salt2fa || "0"),
       createdAt: new Date().toISOString()
     };
     persist();
