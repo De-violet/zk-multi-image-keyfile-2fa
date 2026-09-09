@@ -1,16 +1,15 @@
 import { hashFileDeterministic } from './crypto/fileHash.js';
-import { generateAutoSalt } from './crypto/saltManager.js';
+import { deriveSaltFromPassphrase, generateAutoSalt } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof } from './crypto/zkProver.js';
 
-// State aplikasi
+// State aplikasi murni in-memory (tanpa penyimpanan localStorage)
 const state = {
-  loginFiles: [null, null, null],
   regFiles: [null, null, null],
-  currentSalt: generateAutoSalt(),
-  
-  // State untuk ZKP Interactive Lab (Foto Pribadi Pengunjung)
+  loginFiles: [null, null, null],
   labFiles: [null, null, null],
+
+  // State Verifier Lab
   labSalt: generateAutoSalt(),
   labNonce: null,
   labRootCommitment: null,
@@ -46,10 +45,10 @@ function setupSlot(mode, index) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (mode === 'login') {
-      state.loginFiles[index] = file;
-    } else if (mode === 'reg') {
+    if (mode === 'reg') {
       state.regFiles[index] = file;
+    } else if (mode === 'login') {
+      state.loginFiles[index] = file;
     } else if (mode === 'lab') {
       state.labFiles[index] = file;
       updateLabFileDetails();
@@ -83,12 +82,12 @@ function resetSlots(mode) {
       `;
     }
   });
-  if (mode === 'login') state.loginFiles = [null, null, null];
   if (mode === 'reg') state.regFiles = [null, null, null];
+  if (mode === 'login') state.loginFiles = [null, null, null];
   if (mode === 'lab') state.labFiles = [null, null, null];
 }
 
-// Update info detail file di ZK Lab
+// Update detail file di Verifier Lab
 function updateLabFileDetails() {
   const details = document.getElementById('labFileDetails');
   if (!details) return;
@@ -103,11 +102,10 @@ function updateLabFileDetails() {
   details.innerHTML = state.labFiles.map((f, i) => {
     if (!f) return `<div>• Foto ${i + 1}: <span style="color:#f87171;">Belum dipilih</span></div>`;
     const sizeKb = (f.size / 1024).toFixed(1);
-    return `<div>• Foto ${i + 1}: <strong>${f.name}</strong> (${sizeKb} KB, tipe ${f.type || 'image'})</div>`;
+    return `<div>• Foto ${i + 1}: <strong>${f.name}</strong> (${sizeKb} KB)</div>`;
   }).join('');
 }
 
-// Reset pipeline ZK Lab saat foto diganti
 function resetLabPipeline() {
   const btnGenProof = document.getElementById('btnLabGenProof');
   const btnTamper = document.getElementById('btnLabTamperProof');
@@ -129,61 +127,84 @@ function resetLabPipeline() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Inisialisasi slot file
+  // Pasang slot file untuk ketiga mode
   [0, 1, 2].forEach(i => {
-    setupSlot('login', i);
     setupSlot('reg', i);
+    setupSlot('login', i);
     setupSlot('lab', i);
   });
 
   const appContainer = document.getElementById('appContainer');
-  const tabBtnLogin = document.getElementById('tabBtnLogin');
   const tabBtnRegister = document.getElementById('tabBtnRegister');
-  const tabBtnZkLab = document.getElementById('tabBtnZkLab');
-  const formLogin = document.getElementById('formLogin');
+  const tabBtnLogin = document.getElementById('tabBtnLogin');
+  const tabBtnVerifier = document.getElementById('tabBtnVerifier');
+
   const formRegister = document.getElementById('formRegister');
-  const sectionZkLab = document.getElementById('sectionZkLab');
+  const formLogin = document.getElementById('formLogin');
+  const sectionVerifier = document.getElementById('sectionVerifier');
+  const authCard = document.getElementById('authCard');
+  const successCard = document.getElementById('successCard');
 
-  function showLoginTab() {
-    appContainer.classList.remove('wide-mode');
-    tabBtnLogin.classList.add('active');
-    tabBtnRegister.classList.remove('active');
-    tabBtnZkLab.classList.remove('active');
-    formLogin.style.display = 'flex';
-    formRegister.style.display = 'none';
-    sectionZkLab.style.display = 'none';
-    hideStatus('loginStatus');
-    hideStatus('regStatus');
-  }
-
+  // Tab 1: Daftar Akun
   function showRegisterTab() {
     appContainer.classList.remove('wide-mode');
+    authCard.style.display = 'block';
+    successCard.style.display = 'none';
+
     tabBtnRegister.classList.add('active');
     tabBtnLogin.classList.remove('active');
-    tabBtnZkLab.classList.remove('active');
+    tabBtnVerifier.classList.remove('active');
+
     formRegister.style.display = 'flex';
     formLogin.style.display = 'none';
-    sectionZkLab.style.display = 'none';
-    hideStatus('loginStatus');
+    sectionVerifier.style.display = 'none';
+
     hideStatus('regStatus');
+    hideStatus('loginStatus');
   }
 
-  function showZkLabTab() {
-    appContainer.classList.add('wide-mode');
-    tabBtnZkLab.classList.add('active');
-    tabBtnLogin.classList.remove('active');
+  // Tab 2: Login Akun
+  function showLoginTab() {
+    appContainer.classList.remove('wide-mode');
+    authCard.style.display = 'block';
+    successCard.style.display = 'none';
+
+    tabBtnLogin.classList.add('active');
     tabBtnRegister.classList.remove('active');
-    sectionZkLab.style.display = 'flex';
-    formLogin.style.display = 'none';
+    tabBtnVerifier.classList.remove('active');
+
+    formLogin.style.display = 'flex';
     formRegister.style.display = 'none';
+    sectionVerifier.style.display = 'none';
+
+    hideStatus('regStatus');
+    hideStatus('loginStatus');
   }
 
-  tabBtnLogin.addEventListener('click', showLoginTab);
+  // Tab 3: Verifier
+  function showVerifierTab() {
+    appContainer.classList.add('wide-mode');
+    authCard.style.display = 'block';
+    successCard.style.display = 'none';
+
+    tabBtnVerifier.classList.add('active');
+    tabBtnRegister.classList.remove('active');
+    tabBtnLogin.classList.remove('active');
+
+    sectionVerifier.style.display = 'flex';
+    formRegister.style.display = 'none';
+    formLogin.style.display = 'none';
+  }
+
   tabBtnRegister.addEventListener('click', showRegisterTab);
-  tabBtnZkLab.addEventListener('click', showZkLabTab);
+  tabBtnLogin.addEventListener('click', showLoginTab);
+  tabBtnVerifier.addEventListener('click', showVerifierTab);
+
+  // Default: Buka langkah 1 (Daftar Akun)
+  showRegisterTab();
 
   // ==========================================
-  // REGISTRASI DENGAN FOTO PRIBADI
+  // 1. DAFTAR AKUN
   // ==========================================
   formRegister.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -194,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const [f1, f2, f3] = state.regFiles;
 
     if (!f1 || !f2 || !f3) {
-      showStatus('regStatus', 'error', 'Pilih 3 foto/gambar dari perangkat Anda sebagai kunci 2FA.');
+      showStatus('regStatus', 'error', 'Pilih 3 foto dari perangkat Anda sebagai kunci 2FA.');
       return;
     }
 
@@ -203,25 +224,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const spinner = btn.querySelector('.spinner');
 
     btn.disabled = true;
-    btnText.textContent = 'Memproses Kunci...';
+    btnText.textContent = 'Menghitung Komitmen ZKP...';
     spinner.style.display = 'block';
 
     try {
-      showStatus('regStatus', 'info', 'Menghitung hash kriptografi 3 foto secara lokal di browser...');
+      showStatus('regStatus', 'info', 'Menghitung reduksi hash 3 foto secara lokal di browser...');
       const [h1, h2, h3] = await Promise.all([
         hashFileDeterministic(f1),
         hashFileDeterministic(f2),
         hashFileDeterministic(f3)
       ]);
 
+      // Turunkan salt secara deterministik dari passphrase & username (tanpa simpan di localStorage)
+      const saltObj = await deriveSaltFromPassphrase(password, username);
+
       const { rootCommitment } = await computeHierarchicalCommitment(
         h1.fieldElement,
         h2.fieldElement,
         h3.fieldElement,
-        state.currentSalt.fieldElement
+        saltObj.fieldElement
       );
 
-      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server (tanpa mengirim foto)...');
+      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server (hanya mengirim Root Commitment, foto tetap privat)...');
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -238,30 +262,26 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      try {
-        localStorage.setItem(`zk2fa_salt_${username.toLowerCase()}`, JSON.stringify(state.currentSalt));
-      } catch (err) {}
-
-      showStatus('regStatus', 'success', `✓ Akun ${username} berhasil didaftarkan! Mengalihkan ke tab Masuk...`);
+      showStatus('regStatus', 'success', `✓ Akun "${username}" berhasil didaftarkan! Mengalihkan ke Langkah 2: Login Akun...`);
 
       setTimeout(() => {
         showLoginTab();
         document.getElementById('loginUsername').value = username;
         document.getElementById('loginPassword').value = '';
-        showStatus('loginStatus', 'info', `Silakan masukkan password dan 3 foto yang sama untuk akun "${username}".`);
+        showStatus('loginStatus', 'info', `Akun "${username}" siap. Masukkan password dan 3 foto kunci yang sama untuk masuk.`);
       }, 1200);
 
     } catch (err) {
       showStatus('regStatus', 'error', 'Terjadi kesalahan: ' + err.message);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'Daftarkan Akun & Kunci 2FA';
+      btnText.textContent = '1. Daftarkan Akun & Kunci 2FA';
       spinner.style.display = 'none';
     }
   });
 
   // ==========================================
-  // LOGIN 2FA DENGAN FOTO PRIBADI
+  // 2. LOGIN AKUN DENGAN ZKP
   // ==========================================
   formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -272,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const [f1, f2, f3] = state.loginFiles;
 
     if (!f1 || !f2 || !f3) {
-      showStatus('loginStatus', 'error', 'Pilih 3 foto yang sama seperti saat Anda mendaftar.');
+      showStatus('loginStatus', 'error', 'Pilih 3 foto yang sama seperti saat pendaftaran.');
       return;
     }
 
@@ -286,8 +306,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const startTime = performance.now();
 
     try {
-      btnText.textContent = 'Verifikasi Akun...';
-      showStatus('loginStatus', 'info', '1/3 Memverifikasi username dan password...');
+      btnText.textContent = 'Verifikasi Kredensial...';
+      showStatus('loginStatus', 'info', '1/3 Memverifikasi username dan password di server...');
 
       const challengeRes = await fetch('/api/auth/challenge', {
         method: 'POST',
@@ -303,14 +323,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const { sessionNonce, rootCommitment } = challengeData;
 
-      let userSalt = state.currentSalt;
-      try {
-        const cached = localStorage.getItem(`zk2fa_salt_${username.toLowerCase()}`);
-        if (cached) userSalt = JSON.parse(cached);
-      } catch (err) {}
-
-      btnText.textContent = 'Membuat Bukti ZK...';
-      showStatus('loginStatus', 'info', '2/3 Menghitung bukti Groth16 dari 3 foto di browser...');
+      btnText.textContent = 'Menghitung Bukti ZK...';
+      showStatus('loginStatus', 'info', '2/3 Menghasilkan saksi & bukti Groth16 di WebAssembly lokal...');
 
       const [h1, h2, h3] = await Promise.all([
         hashFileDeterministic(f1),
@@ -318,22 +332,25 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
+      // Turunkan salt secara deterministik dari password & username murni saat login
+      const saltObj = await deriveSaltFromPassphrase(password, username);
+
       const zkpResult = await generateZkProof({
         h1: h1.fieldElement,
         h2: h2.fieldElement,
         h3: h3.fieldElement,
-        salt: userSalt.fieldElement,
+        salt: saltObj.fieldElement,
         rootCommitment: rootCommitment,
         sessionNonce: sessionNonce
       });
 
       if (!zkpResult.success) {
-        showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda pilih tidak cocok dengan foto saat pendaftaran! (Zero-Noise Tolerance: 1-bit berbeda menggagalkan sirkuit).');
+        showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto tidak cocok dengan yang didaftarkan! (Zero-Noise Tolerance: 1-bit berbeda menggagalkan sirkuit).');
         return;
       }
 
       btnText.textContent = 'Verifikasi Server...';
-      showStatus('loginStatus', 'info', '3/3 Mengirim bukti 256-byte ke server (foto tidak dikirim)...');
+      showStatus('loginStatus', 'info', '3/3 Mengirim bukti 256-byte ke server...');
 
       const verifyRes = await fetch('/api/auth/verify-2fa', {
         method: 'POST',
@@ -354,9 +371,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const totalDuration = Math.round(performance.now() - startTime);
 
-      // Tampilkan Halaman Sukses
-      document.getElementById('authCard').style.display = 'none';
-      const successCard = document.getElementById('successCard');
+      // Simpan bukti terakhir agar dapat langsung diverifikasi di tab 3
+      state.labProof = zkpResult.proof;
+      state.labPublicSignals = [
+        zkpResult.sessionAuthToken,
+        rootCommitment,
+        sessionNonce
+      ];
+
+      // Beralih ke layar sukses
+      authCard.style.display = 'none';
       successCard.style.display = 'block';
 
       document.getElementById('loggedInUser').textContent = `@${username}`;
@@ -365,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const receiptPre = document.getElementById('loginProofReceipt');
       if (receiptPre) {
         receiptPre.textContent = JSON.stringify({
-          protocol: 'Groth16 (zk-SNARK)',
+          protocol: 'Groth16 zk-SNARK',
           curve: 'BN254 (alt_bn128)',
           pi_a: zkpResult.proof.pi_a.slice(0, 2),
           pi_b: zkpResult.proof.pi_b.slice(0, 2),
@@ -384,15 +408,20 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('loginStatus', 'error', 'Koneksi error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'Masuk dengan ZK 2FA';
+      btnText.textContent = '2. Masuk dengan ZK 2FA';
       spinner.style.display = 'none';
     }
   });
 
-  // LOGOUT
+  // Tombol dari Layar Sukses menuju Tab 3: Verifier
+  document.getElementById('btnGoToVerifier').addEventListener('click', () => {
+    showVerifierTab();
+  });
+
+  // LOGOUT (Keluar)
   document.getElementById('btnLogout').addEventListener('click', () => {
-    document.getElementById('successCard').style.display = 'none';
-    document.getElementById('authCard').style.display = 'block';
+    successCard.style.display = 'none';
+    authCard.style.display = 'block';
 
     document.getElementById('loginPassword').value = '';
     resetSlots('login');
@@ -401,7 +430,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // ZKP INTERACTIVE LAB (FOTO PRIBADI)
+  // 3. VERIFIER (UJI MANDIRI WITNESS • PROOF • VERIFIER)
   // ==========================================
   const btnLabGenWitness = document.getElementById('btnLabGenWitness');
   const btnLabGenProof = document.getElementById('btnLabGenProof');
@@ -413,17 +442,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const labProofOutput = document.getElementById('labProofOutput');
   const labVerifyOutput = document.getElementById('labVerifyOutput');
 
-  // TAHAP 1: WITNESS
+  // Tahap A: Hitung Witness dari Foto
   btnLabGenWitness.addEventListener('click', async () => {
     const [f1, f2, f3] = state.labFiles;
     if (!f1 || !f2 || !f3) {
-      alert('Pilih ketiga foto asli Anda terlebih dahulu pada slot di atas sebelum menghitung witness.');
+      alert('Pilih 3 foto pada slot di atas terlebih dahulu.');
       return;
     }
 
     btnLabGenWitness.disabled = true;
     btnLabGenWitness.textContent = 'Menghitung Saksi...';
-    labWitnessOutput.innerHTML = '<span style="color:#93c5fd;">Membaca byte foto Anda & menghitung reduksi SHA-256 modulo BN254...</span>';
+    labWitnessOutput.innerHTML = '<span style="color:#93c5fd;">Membaca byte foto & menghitung reduksi SHA-256 modulo BN254...</span>';
 
     try {
       const [h1, h2, h3] = await Promise.all([
@@ -440,7 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
       );
       state.labRootCommitment = commitmentResult.rootCommitment;
 
-      // Hasilkan nonce acak 128-bit modulo BN254 field
       const randBytes = crypto.getRandomValues(new Uint8Array(16));
       const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
       const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
@@ -468,15 +496,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }, null, 2);
 
       btnLabGenProof.disabled = false;
-      btnLabGenWitness.textContent = '✓ 1. Hitung Witness dari Foto';
+      btnLabGenWitness.textContent = '✓ Hitung Witness dari Foto';
     } catch (err) {
       labWitnessOutput.innerHTML = `<span style="color:#ef4444;">Error Witness: ${err.message}</span>`;
       btnLabGenWitness.disabled = false;
-      btnLabGenWitness.textContent = '1. Hitung Witness dari Foto';
+      btnLabGenWitness.textContent = 'Hitung Witness dari Foto';
     }
   });
 
-  // TAHAP 2: PROOF
+  // Tahap B: Sintesis Proof
   btnLabGenProof.addEventListener('click', async () => {
     if (!state.labWitnessInputs) return;
 
@@ -511,15 +539,15 @@ document.addEventListener('DOMContentLoaded', () => {
       btnLabRunVerify.disabled = false;
       btnLabTamperProof.disabled = false;
       btnLabCopyProof.disabled = false;
-      btnLabGenProof.textContent = '✓ 2. Sintesis Proof';
+      btnLabGenProof.textContent = '✓ Sintesis Proof';
     } catch (err) {
       labProofOutput.innerHTML = `<span style="color:#ef4444;">Error Proof: ${err.message}</span>`;
       btnLabGenProof.disabled = false;
-      btnLabGenProof.textContent = '2. Sintesis Proof';
+      btnLabGenProof.textContent = 'Sintesis Proof';
     }
   });
 
-  // TAMPER PROOF
+  // Rusak Bukti (Tamper Proof)
   btnLabTamperProof.addEventListener('click', () => {
     if (!state.labProof) return;
     const orig = state.labProof.pi_a[0];
@@ -528,14 +556,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     labProofOutput.innerHTML = `
 <span style="color:#f87171; font-weight: bold;">⚠️ BUKTI TELAH DIRUSAK (Tamper Test Aktif):</span>
-Titik pi_a[0] kurva eliptik telah diubah nilainya!
-Sekarang klik "3. Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan menolaknya.
+Titik pi_a[0] kurva eliptik telah dimodifikasi!
+Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan menolaknya.
 `;
     btnLabTamperProof.disabled = true;
     btnLabTamperProof.textContent = '⚠️ Bukti Telah Dirusak';
   });
 
-  // COPY PROOF
+  // Salin JSON
   btnLabCopyProof.addEventListener('click', () => {
     if (!state.labProof) return;
     const full = JSON.stringify({ proof: state.labProof, publicSignals: state.labPublicSignals }, null, 2);
@@ -544,7 +572,7 @@ Sekarang klik "3. Jalankan Verifier" di bawah untuk membuktikan bahwa verifier a
     setTimeout(() => { btnLabCopyProof.textContent = 'Salin JSON'; }, 1500);
   });
 
-  // TAHAP 3: VERIFIER
+  // Tahap C: Verifier
   btnLabRunVerify.addEventListener('click', async () => {
     if (!state.labProof || !state.labPublicSignals) return;
 
@@ -574,7 +602,7 @@ Sekarang klik "3. Jalankan Verifier" di bawah untuk membuktikan bahwa verifier a
           <div style="font-size: 0.8rem; line-height: 1.4;">
             • Persamaan Bilinear Pairing Terpenuhi: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) == e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code><br>
             • Waktu verifikasi: <strong>${verifyDuration} ms</strong><br>
-            • <strong>Zero-Knowledge Terbukti:</strong> Verifier membuktikan Anda memiliki ketiga foto asli tanpa pernah mengunggah atau melihat isi foto tersebut!
+            • <strong>Zero-Knowledge Terbukti:</strong> Verifier membuktikan kepemilikan 3 foto asli tanpa foto pernah diunggah atau dilihat oleh siapapun!
           </div>
         `;
       } else {
@@ -594,7 +622,7 @@ Sekarang klik "3. Jalankan Verifier" di bawah untuk membuktikan bahwa verifier a
       labVerifyOutput.innerHTML = `<span style="color:#ef4444;">Error Verifikasi: ${err.message}</span>`;
     } finally {
       btnLabRunVerify.disabled = false;
-      btnLabRunVerify.textContent = '3. Jalankan Verifier';
+      btnLabRunVerify.textContent = 'Jalankan Verifier';
     }
   });
 
