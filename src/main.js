@@ -1,6 +1,6 @@
 import { hashFileDeterministic } from './crypto/fileHash.js';
 import { generateAutoSalt } from './crypto/saltManager.js';
-import { computeHierarchicalCommitment, computeSessionAuthToken } from './crypto/poseidon.js';
+import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof } from './crypto/zkProver.js';
 
 // State aplikasi
@@ -9,12 +9,11 @@ const state = {
   regFiles: [null, null, null],
   currentSalt: generateAutoSalt(),
   
-  // State untuk ZKP Test Lab
+  // State untuk ZKP Interactive Lab (Foto Pribadi Pengunjung)
   labFiles: [null, null, null],
   labSalt: generateAutoSalt(),
-  labNonce: '1234567890abcdef',
+  labNonce: null,
   labRootCommitment: null,
-  labAuthToken: null,
   labWitnessInputs: null,
   labProof: null,
   labPublicSignals: null,
@@ -49,16 +48,20 @@ function setupSlot(mode, index) {
 
     if (mode === 'login') {
       state.loginFiles[index] = file;
-    } else {
+    } else if (mode === 'reg') {
       state.regFiles[index] = file;
+    } else if (mode === 'lab') {
+      state.labFiles[index] = file;
+      updateLabFileDetails();
+      resetLabPipeline();
     }
 
     slot.classList.add('filled');
     const reader = new FileReader();
     reader.onload = (evt) => {
       preview.innerHTML = `
-        <img src="${evt.target.result}" class="slot-img-preview" alt="Key ${index + 1}">
-        <span style="position: absolute; bottom: 4px; background: rgba(0,0,0,0.7); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px;">Kunci ${index + 1}</span>
+        <img src="${evt.target.result}" class="slot-img-preview" alt="${file.name}">
+        <span style="position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
       `;
     };
     reader.readAsDataURL(file);
@@ -76,91 +79,61 @@ function resetSlots(mode) {
     if (preview) {
       preview.innerHTML = `
         <span class="slot-number">${i + 1}</span>
-        <span class="slot-text">Pilih Gambar ${i + 1}</span>
+        <span class="slot-text">Pilih Foto ${i + 1}</span>
       `;
     }
   });
   if (mode === 'login') state.loginFiles = [null, null, null];
   if (mode === 'reg') state.regFiles = [null, null, null];
+  if (mode === 'lab') state.labFiles = [null, null, null];
 }
 
-// Unduh berkas contoh dan pasang ke slot pendaftaran
-function createSampleKeys() {
-  const colors = ['#3b82f6', '#10b981', '#f59e0b'];
-  const labels = ['KUNCI_ALPHA', 'KUNCI_BETA', 'KUNCI_GAMMA'];
+// Update info detail file di ZK Lab
+function updateLabFileDetails() {
+  const details = document.getElementById('labFileDetails');
+  if (!details) return;
 
-  [0, 1, 2].forEach(i => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 120;
-    canvas.height = 120;
-    const ctx = canvas.getContext('2d');
+  const validFiles = state.labFiles.filter(f => f !== null);
+  if (validFiles.length === 0) {
+    details.style.display = 'none';
+    return;
+  }
 
-    ctx.fillStyle = colors[i];
-    ctx.fillRect(0, 0, 120, 120);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(labels[i], 60, 50);
-
-    ctx.font = '11px sans-serif';
-    ctx.fillText(`KEY #${i + 1}`, 60, 75);
-
-    canvas.toBlob((blob) => {
-      const filename = `kunci_0${i + 1}.png`;
-      const file = new File([blob], filename, { type: 'image/png' });
-
-      state.regFiles[i] = file;
-
-      const slot = document.getElementById(`regSlot${i + 1}`);
-      const preview = document.getElementById(`regPreview${i + 1}`);
-      if (slot && preview) {
-        slot.classList.add('filled');
-        preview.innerHTML = `
-          <img src="${canvas.toDataURL()}" class="slot-img-preview" alt="${filename}">
-          <span style="position: absolute; bottom: 4px; background: rgba(0,0,0,0.7); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px;">${filename}</span>
-        `;
-      }
-
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }, 'image/png');
-  });
-
-  showStatus('regStatus', 'info', '✓ 3 File kunci (kunci_01, kunci_02, kunci_03) berhasil diunduh dan dipasang!');
+  details.style.display = 'flex';
+  details.innerHTML = state.labFiles.map((f, i) => {
+    if (!f) return `<div>• Foto ${i + 1}: <span style="color:#f87171;">Belum dipilih</span></div>`;
+    const sizeKb = (f.size / 1024).toFixed(1);
+    return `<div>• Foto ${i + 1}: <strong>${f.name}</strong> (${sizeKb} KB, tipe ${f.type || 'image'})</div>`;
+  }).join('');
 }
 
-// Generate in-memory file sampel untuk ZKP Lab
-function generateLabSampleFiles() {
-  const colors = ['#2563eb', '#059669', '#d97706'];
-  return colors.map((color, i) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 64;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = color;
-    ctx.fillRect(0, 0, 64, 64);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(`LAB #${i + 1}`, 14, 36);
+// Reset pipeline ZK Lab saat foto diganti
+function resetLabPipeline() {
+  const btnGenProof = document.getElementById('btnLabGenProof');
+  const btnTamper = document.getElementById('btnLabTamperProof');
+  const btnCopy = document.getElementById('btnLabCopyProof');
+  const btnVerify = document.getElementById('btnLabRunVerify');
+  const labProofOutput = document.getElementById('labProofOutput');
+  const labVerifyOutput = document.getElementById('labVerifyOutput');
 
-    const binStr = atob(canvas.toDataURL().split(',')[1]);
-    const len = binStr.length;
-    const arr = new Uint8Array(len);
-    for (let j = 0; j < len; j++) arr[j] = binStr.charCodeAt(j);
-    return new File([arr], `lab_sample_${i + 1}.png`, { type: 'image/png' });
-  });
+  if (btnGenProof) btnGenProof.disabled = true;
+  if (btnTamper) { btnTamper.disabled = true; btnTamper.textContent = '🧪 Rusak Bukti (Tamper Proof)'; }
+  if (btnCopy) btnCopy.disabled = true;
+  if (btnVerify) btnVerify.disabled = true;
+
+  if (labProofOutput) labProofOutput.innerHTML = '<span class="code-placeholder">Menunggu sintesis bukti...</span>';
+  if (labVerifyOutput) {
+    labVerifyOutput.className = 'verifier-result-box';
+    labVerifyOutput.innerHTML = '<span class="code-placeholder">Menunggu eksekusi verifier...</span>';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Inisialisasi slot file
   [0, 1, 2].forEach(i => {
     setupSlot('login', i);
     setupSlot('reg', i);
+    setupSlot('lab', i);
   });
 
   const appContainer = document.getElementById('appContainer');
@@ -209,10 +182,8 @@ document.addEventListener('DOMContentLoaded', () => {
   tabBtnRegister.addEventListener('click', showRegisterTab);
   tabBtnZkLab.addEventListener('click', showZkLabTab);
 
-  document.getElementById('btnGenSamples').addEventListener('click', createSampleKeys);
-
   // ==========================================
-  // REGISTRASI
+  // REGISTRASI DENGAN FOTO PRIBADI
   // ==========================================
   formRegister.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -223,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const [f1, f2, f3] = state.regFiles;
 
     if (!f1 || !f2 || !f3) {
-      showStatus('regStatus', 'error', 'Pilih ketiga file gambar kunci 2FA terlebih dahulu.');
+      showStatus('regStatus', 'error', 'Pilih 3 foto/gambar dari perangkat Anda sebagai kunci 2FA.');
       return;
     }
 
@@ -236,7 +207,7 @@ document.addEventListener('DOMContentLoaded', () => {
     spinner.style.display = 'block';
 
     try {
-      showStatus('regStatus', 'info', 'Menghitung hash kriptografi 3 gambar...');
+      showStatus('regStatus', 'info', 'Menghitung hash kriptografi 3 foto secara lokal di browser...');
       const [h1, h2, h3] = await Promise.all([
         hashFileDeterministic(f1),
         hashFileDeterministic(f2),
@@ -250,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.currentSalt.fieldElement
       );
 
-      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server...');
+      showStatus('regStatus', 'info', 'Mendaftarkan akun ke server (tanpa mengirim foto)...');
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,20 +248,20 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoginTab();
         document.getElementById('loginUsername').value = username;
         document.getElementById('loginPassword').value = '';
-        showStatus('loginStatus', 'info', `Silakan masukkan password dan 3 kunci gambar untuk akun "${username}".`);
+        showStatus('loginStatus', 'info', `Silakan masukkan password dan 3 foto yang sama untuk akun "${username}".`);
       }, 1200);
 
     } catch (err) {
       showStatus('regStatus', 'error', 'Terjadi kesalahan: ' + err.message);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'Daftarkan Akun';
+      btnText.textContent = 'Daftarkan Akun & Kunci 2FA';
       spinner.style.display = 'none';
     }
   });
 
   // ==========================================
-  // LOGIN DENGAN 2FA ZKP
+  // LOGIN 2FA DENGAN FOTO PRIBADI
   // ==========================================
   formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -301,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const [f1, f2, f3] = state.loginFiles;
 
     if (!f1 || !f2 || !f3) {
-      showStatus('loginStatus', 'error', 'Pilih ketiga file gambar kunci 2FA Anda.');
+      showStatus('loginStatus', 'error', 'Pilih 3 foto yang sama seperti saat Anda mendaftar.');
       return;
     }
 
@@ -316,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       btnText.textContent = 'Verifikasi Akun...';
-      showStatus('loginStatus', 'info', '1/3 Memverifikasi kredensial pengguna...');
+      showStatus('loginStatus', 'info', '1/3 Memverifikasi username dan password...');
 
       const challengeRes = await fetch('/api/auth/challenge', {
         method: 'POST',
@@ -339,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {}
 
       btnText.textContent = 'Membuat Bukti ZK...';
-      showStatus('loginStatus', 'info', '2/3 Menghasilkan saksi & bukti Zero-Knowledge (Groth16)...');
+      showStatus('loginStatus', 'info', '2/3 Menghitung bukti Groth16 dari 3 foto di browser...');
 
       const [h1, h2, h3] = await Promise.all([
         hashFileDeterministic(f1),
@@ -357,12 +328,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!zkpResult.success) {
-        showStatus('loginStatus', 'error', '❌ Kunci gambar salah atau tidak cocok dengan pendaftaran! (Circom Constraint Mismatch)');
+        showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda pilih tidak cocok dengan foto saat pendaftaran! (Zero-Noise Tolerance: 1-bit berbeda menggagalkan sirkuit).');
         return;
       }
 
       btnText.textContent = 'Verifikasi Server...';
-      showStatus('loginStatus', 'info', '3/3 Memverifikasi bukti kriptografi di server...');
+      showStatus('loginStatus', 'info', '3/3 Mengirim bukti 256-byte ke server (foto tidak dikirim)...');
 
       const verifyRes = await fetch('/api/auth/verify-2fa', {
         method: 'POST',
@@ -391,7 +362,6 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('loggedInUser').textContent = `@${username}`;
       document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
 
-      // Simpan receipt bukti kriptografi
       const receiptPre = document.getElementById('loginProofReceipt');
       if (receiptPre) {
         receiptPre.textContent = JSON.stringify({
@@ -414,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('loginStatus', 'error', 'Koneksi error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btnText.textContent = 'Masuk';
+      btnText.textContent = 'Masuk dengan ZK 2FA';
       spinner.style.display = 'none';
     }
   });
@@ -427,13 +397,12 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginPassword').value = '';
     resetSlots('login');
     showLoginTab();
-    showStatus('loginStatus', 'info', 'Anda telah keluar. Masukkan kembali password & 3 gambar kunci untuk masuk.');
+    showStatus('loginStatus', 'info', 'Anda telah keluar. Masukkan kembali password & 3 foto kunci untuk masuk.');
   });
 
   // ==========================================
-  // ZKP TEST LAB (WITNESS • PROOF • VERIFIER)
+  // ZKP INTERACTIVE LAB (FOTO PRIBADI)
   // ==========================================
-  const btnLabUseSamples = document.getElementById('btnLabUseSamples');
   const btnLabGenWitness = document.getElementById('btnLabGenWitness');
   const btnLabGenProof = document.getElementById('btnLabGenProof');
   const btnLabTamperProof = document.getElementById('btnLabTamperProof');
@@ -444,27 +413,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const labProofOutput = document.getElementById('labProofOutput');
   const labVerifyOutput = document.getElementById('labVerifyOutput');
 
-  btnLabUseSamples.addEventListener('click', () => {
-    state.labFiles = generateLabSampleFiles();
-    btnLabUseSamples.textContent = '✓ 3 Kunci Sampel Siap';
-    labWitnessOutput.innerHTML = '<span style="color:#34d399;">✓ 3 Gambar kunci sampel dimuat di memory. Klik "1. Hitung Witness".</span>';
-  });
-
   // TAHAP 1: WITNESS
   btnLabGenWitness.addEventListener('click', async () => {
+    const [f1, f2, f3] = state.labFiles;
+    if (!f1 || !f2 || !f3) {
+      alert('Pilih ketiga foto asli Anda terlebih dahulu pada slot di atas sebelum menghitung witness.');
+      return;
+    }
+
     btnLabGenWitness.disabled = true;
     btnLabGenWitness.textContent = 'Menghitung Saksi...';
-    labWitnessOutput.innerHTML = '<span style="color:#93c5fd;">Menghitung reduksi SHA-256 dan Poseidon commitments...</span>';
+    labWitnessOutput.innerHTML = '<span style="color:#93c5fd;">Membaca byte foto Anda & menghitung reduksi SHA-256 modulo BN254...</span>';
 
     try {
-      if (!state.labFiles[0]) {
-        state.labFiles = generateLabSampleFiles();
-      }
-
       const [h1, h2, h3] = await Promise.all([
-        hashFileDeterministic(state.labFiles[0]),
-        hashFileDeterministic(state.labFiles[1]),
-        hashFileDeterministic(state.labFiles[2])
+        hashFileDeterministic(f1),
+        hashFileDeterministic(f2),
+        hashFileDeterministic(f3)
       ]);
 
       state.labRootCommitment = await computeHierarchicalCommitment(
@@ -487,26 +452,23 @@ document.addEventListener('DOMContentLoaded', () => {
       };
 
       labWitnessOutput.textContent = JSON.stringify({
-        status: 'WITNESS_COMPUTED',
-        circuitConstraints: '~1.412 R1CS Constraints',
-        privateWitnessSignals: {
-          image_h1_mod_r: h1.fieldElement.slice(0, 18) + '...',
-          image_h2_mod_r: h2.fieldElement.slice(0, 18) + '...',
-          image_h3_mod_r: h3.fieldElement.slice(0, 18) + '...',
-          salt_secret: state.labSalt.fieldElement.slice(0, 18) + '...'
-        },
-        publicSignalsToProve: {
-          rootCommitment: state.labRootCommitment.slice(0, 18) + '...',
-          sessionNonce: state.labNonce
-        }
+        status: 'WITNESS_COMPUTED_LOCALLY',
+        sourceFiles: [
+          { slot: 1, name: f1.name, sizeBytes: f1.size, hash_mod_r: h1.fieldElement.slice(0, 16) + '...' },
+          { slot: 2, name: f2.name, sizeBytes: f2.size, hash_mod_r: h2.fieldElement.slice(0, 16) + '...' },
+          { slot: 3, name: f3.name, sizeBytes: f3.size, hash_mod_r: h3.fieldElement.slice(0, 16) + '...' }
+        ],
+        circuitConstraints: '~1.412 R1CS Constraints (WASM)',
+        rootCommitment: state.labRootCommitment.slice(0, 20) + '...',
+        sessionNonce: state.labNonce
       }, null, 2);
 
       btnLabGenProof.disabled = false;
-      btnLabGenWitness.textContent = '✓ 1. Hitung Witness';
+      btnLabGenWitness.textContent = '✓ 1. Hitung Witness dari Foto';
     } catch (err) {
       labWitnessOutput.innerHTML = `<span style="color:#ef4444;">Error Witness: ${err.message}</span>`;
       btnLabGenWitness.disabled = false;
-      btnLabGenWitness.textContent = '1. Hitung Witness';
+      btnLabGenWitness.textContent = '1. Hitung Witness dari Foto';
     }
   });
 
@@ -516,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     btnLabGenProof.disabled = true;
     btnLabGenProof.textContent = 'Mensintesis Proof...';
-    labProofOutput.innerHTML = '<span style="color:#c4b5fd;">Mengeksekusi Groth16 Prover di WebAssembly BN254...</span>';
+    labProofOutput.innerHTML = '<span style="color:#c4b5fd;">Menghitung bukti Groth16 di WebAssembly BN254 dari foto Anda...</span>';
 
     try {
       const res = await generateZkProof(state.labWitnessInputs);
@@ -556,18 +518,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // TAMPER PROOF
   btnLabTamperProof.addEventListener('click', () => {
     if (!state.labProof) return;
-    // Modifikasi 1 karakter titik pi_a
     const orig = state.labProof.pi_a[0];
     const altered = orig.slice(0, -1) + (orig.slice(-1) === '1' ? '2' : '1');
     state.labProof.pi_a[0] = altered;
 
     labProofOutput.innerHTML = `
-<span style="color:#f87171; font-weight: bold;">⚠️ BUKTI TELAH DIMODIFIKASI (1-Bit Tamper Test):</span>
-Titik pi_a[0] diubah nilainya!
-Sekarang klik "3. Jalankan Verifier" untuk membuktikan verifier menolak.
+<span style="color:#f87171; font-weight: bold;">⚠️ BUKTI TELAH DIRUSAK (Tamper Test Aktif):</span>
+Titik pi_a[0] kurva eliptik telah diubah nilainya!
+Sekarang klik "3. Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan menolaknya.
 `;
     btnLabTamperProof.disabled = true;
-    btnLabTamperProof.textContent = '⚠️ Bukti Dirusak';
+    btnLabTamperProof.textContent = '⚠️ Bukti Telah Dirusak';
   });
 
   // COPY PROOF
@@ -586,10 +547,9 @@ Sekarang klik "3. Jalankan Verifier" untuk membuktikan verifier menolak.
     btnLabRunVerify.disabled = true;
     btnLabRunVerify.textContent = 'Memverifikasi Pairing...';
     labVerifyOutput.className = 'verifier-result-box';
-    labVerifyOutput.innerHTML = '<span style="color:#93c5fd;">Menghitung Elliptic Curve Bilinear Pairing e(A,B) = e(alpha,beta) + ...</span>';
+    labVerifyOutput.innerHTML = '<span style="color:#93c5fd;">Mengecek persamaan bilinear pairing e(A,B) = e(alpha,beta) + ...</span>';
 
     try {
-      // Ambil verification key jika belum di-cache
       if (!state.labVKey) {
         const vKeyRes = await fetch('/public/zk/verification_key.json');
         state.labVKey = await vKeyRes.json();
@@ -606,11 +566,11 @@ Sekarang klik "3. Jalankan Verifier" untuk membuktikan verifier menolak.
       if (isValid) {
         labVerifyOutput.className = 'verifier-result-box verified';
         labVerifyOutput.innerHTML = `
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">✅ PROOF VERIFIED (Valid Kriptografis)</div>
+          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">✅ PROOF VERIFIED (Valid Secara Matematis)</div>
           <div style="font-size: 0.8rem; line-height: 1.4;">
-            • Persamaan Bilinear Pairing Lolos: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) == e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code><br>
+            • Persamaan Bilinear Pairing Terpenuhi: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) == e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code><br>
             • Waktu verifikasi: <strong>${verifyDuration} ms</strong><br>
-            • <strong>Zero-Knowledge Terbukti:</strong> Verifier memvalidasi kepemilikan 3 kunci gambar tanpa pernah mengetahui konten/gambar aslinya!
+            • <strong>Zero-Knowledge Terbukti:</strong> Verifier membuktikan Anda memiliki ketiga foto asli tanpa pernah mengunggah atau melihat isi foto tersebut!
           </div>
         `;
       } else {
@@ -618,9 +578,9 @@ Sekarang klik "3. Jalankan Verifier" untuk membuktikan verifier menolak.
         labVerifyOutput.innerHTML = `
           <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px;">❌ VERIFICATION FAILED (Bukti Ditolak)</div>
           <div style="font-size: 0.8rem; line-height: 1.4;">
-            • Pairing Check Gagal: Nilai bukti atau sinyal publik tidak memenuhi kurva BN254.<br>
+            • Pairing Check Gagal: Nilai bukti matematika tidak memenuhi kurva eliptik BN254.<br>
             • Waktu verifikasi: <strong>${verifyDuration} ms</strong><br>
-            • Sistem berhasil menggagalkan manipulasi data!
+            • Sistem berhasil menggagalkan manipulasi atau ketidakcocokan kunci!
           </div>
         `;
       }
