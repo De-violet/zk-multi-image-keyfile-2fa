@@ -312,7 +312,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 2. LOGIN AKUN DENGAN ZKP
+  // 2. LOGIN AKUN STANDAR (USERNAME & PASSWORD)
+  // Kunci 2FA hanya digunakan saat lupa password
   // ==========================================
   formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -320,10 +321,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
-    const [f1, f2, f3] = state.loginFiles;
 
-    if (!f1 || !f2 || !f3) {
-      showStatus('loginStatus', 'error', 'Pilih 3 foto yang sama seperti saat pendaftaran.');
+    if (!username || !password) {
+      showStatus('loginStatus', 'error', 'Masukkan username dan password Anda.');
       return;
     }
 
@@ -332,79 +332,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const spinner = btn.querySelector('.spinner');
 
     btn.disabled = true;
+    btnText.textContent = 'Memverifikasi...';
     spinner.style.display = 'block';
 
     const startTime = performance.now();
 
     try {
-      btnText.textContent = 'Verifikasi Kredensial...';
-      showStatus('loginStatus', 'info', '1/3 Memverifikasi username dan password di server...');
-
-      const challengeRes = await fetch('/api/auth/challenge', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
 
-      const challengeData = await challengeRes.json();
-      if (!challengeRes.ok) {
-        showStatus('loginStatus', 'error', challengeData.error || 'Username atau password salah.');
-        return;
-      }
-
-      const { sessionNonce, rootCommitment, salt2fa } = challengeData;
-
-      btnText.textContent = 'Menghitung Bukti ZK...';
-      showStatus('loginStatus', 'info', '2/3 Menghasilkan saksi & bukti Groth16 di WebAssembly lokal...');
-
-      const [h1, h2, h3] = await Promise.all([
-        hashFileDeterministic(f1),
-        hashFileDeterministic(f2),
-        hashFileDeterministic(f3)
-      ]);
-
-      const zkpResult = await generateZkProof({
-        h1: h1.fieldElement,
-        h2: h2.fieldElement,
-        h3: h3.fieldElement,
-        salt: salt2fa || '0',
-        rootCommitment: rootCommitment,
-        sessionNonce: sessionNonce
-      });
-
-      if (!zkpResult.success) {
-        showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto tidak cocok dengan yang didaftarkan! (Zero-Noise Tolerance: 1-bit berbeda menggagalkan sirkuit).');
-        return;
-      }
-
-      btnText.textContent = 'Verifikasi Server...';
-      showStatus('loginStatus', 'info', '3/3 Mengirim bukti 256-byte ke server...');
-
-      const verifyRes = await fetch('/api/auth/verify-2fa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          sessionNonce,
-          sessionAuthToken: zkpResult.sessionAuthToken,
-          proof: zkpResult.proof
-        })
-      });
-
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok) {
-        showStatus('loginStatus', 'error', 'Verifikasi server gagal: ' + (verifyData.error || 'Ditolak'));
+      const data = await res.json();
+      if (!res.ok) {
+        showStatus('loginStatus', 'error', data.error || 'Username atau password salah.');
         return;
       }
 
       const totalDuration = Math.round(performance.now() - startTime);
-
-      state.labProof = zkpResult.proof;
-      state.labPublicSignals = [
-        zkpResult.sessionAuthToken,
-        rootCommitment,
-        sessionNonce
-      ];
 
       authCard.style.display = 'none';
       successCard.style.display = 'block';
@@ -415,18 +361,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const receiptPre = document.getElementById('loginProofReceipt');
       if (receiptPre) {
         receiptPre.textContent = JSON.stringify({
-          protocol: 'Groth16 zk-SNARK',
-          curve: 'BN254 (alt_bn128)',
-          pi_a: zkpResult.proof.pi_a.slice(0, 2),
-          pi_b: zkpResult.proof.pi_b.slice(0, 2),
-          pi_c: zkpResult.proof.pi_c.slice(0, 2),
-          publicSignals: {
-            sessionAuthToken: zkpResult.sessionAuthToken,
-            rootCommitment: rootCommitment,
-            sessionNonce: sessionNonce
-          },
-          verificationDuration: `${verifyData.verificationDurationMs || 35} ms`,
-          verified: true
+          status: 'AUTHENTICATED',
+          authFactor: 'Factor 1 (Master Passphrase)',
+          twoFactorStatus: 'Active (3-Image Keyfile Commitment on Server)',
+          recoveryCapability: 'Zero-Knowledge Self-Sovereign Recovery Enabled',
+          authenticatedAt: data.user.authenticatedAt
         }, null, 2);
       }
 
@@ -434,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('loginStatus', 'error', 'Koneksi error: ' + err.message);
     } finally {
       btn.disabled = false;
-      btnText.textContent = '2. Masuk dengan ZK 2FA';
+      btnText.textContent = '2. Masuk ke Akun';
       spinner.style.display = 'none';
     }
   });

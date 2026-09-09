@@ -92,7 +92,7 @@
 
       <!-- ================= 2. LOGIN AKUN ================= -->
       <form id="formLogin" class="form-content" style="display: none;">
-        <div class="form-step-badge">Langkah 2 dari 3: Masuk Menggunakan Bukti Zero-Knowledge</div>
+        <div class="form-step-badge">Langkah 2 dari 3: Masuk ke Akun Anda</div>
 
         <div class="form-group">
           <label for="loginUsername">Username</label>
@@ -107,38 +107,14 @@
           <input type="password" id="loginPassword" placeholder="Masukkan password Anda" required autocomplete="off">
         </div>
 
-        <div class="form-group">
-          <label>Kunci 2FA (3 Foto yang Sama Saat Mendaftar)</label>
-          <p class="input-hint">Jika salah 1 foto berbeda atau termodifikasi, sirkuit ZK Circom akan langsung menolak di browser.</p>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="loginSlot1">
-              <input type="file" id="loginFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot2">
-              <input type="file" id="loginFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot3">
-              <input type="file" id="loginFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <p class="input-hint" style="font-size: 0.78rem; color: #64748b;">
+          🛡️ Akun dilindungi oleh 3 Kunci Foto 2FA. Kunci foto hanya digunakan untuk membuktikan identitas jika Anda lupa password atau saat pengujian verifier.
+        </p>
 
         <div id="loginStatus" class="status-box" style="display: none;"></div>
 
         <button type="submit" id="btnLoginSubmit" class="btn-primary">
-          <span class="btn-text">2. Masuk dengan ZK 2FA</span>
+          <span class="btn-text">2. Masuk ke Akun</span>
           <div class="spinner" style="display: none;"></div>
         </button>
       </form>
