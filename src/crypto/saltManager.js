@@ -71,10 +71,10 @@ export async function deriveSaltFromPassphrase(passphrase, username) {
 }
 
 /**
- * Mengunduh file backup.key darurat berisi salt pengguna
+ * Menghasilkan struktur payload cadangan otentikasi
  */
-export function downloadBackupKey(username, saltFieldElement, rootCommitment) {
-  const backupPayload = {
+export function createBackupPayload(username, saltFieldElement, rootCommitment) {
+  return {
     standard: 'Zero-Knowledge Multi-Image Keyfile 2FA',
     version: '1.0.0',
     username,
@@ -82,6 +82,13 @@ export function downloadBackupKey(username, saltFieldElement, rootCommitment) {
     rootCommitment,
     notice: 'Simpan file ini dengan aman. Salt ini diperlukan untuk menghasilkan ZK-Proof saat otentikasi.'
   };
+}
+
+/**
+ * Mengunduh file backup.key darurat berisi salt pengguna
+ */
+export function downloadBackupKey(username, saltFieldElement, rootCommitment) {
+  const backupPayload = createBackupPayload(username, saltFieldElement, rootCommitment);
 
   const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
