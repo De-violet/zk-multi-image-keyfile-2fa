@@ -11,7 +11,8 @@
     "test": "node --test --test-concurrency=1 tests/*.test.js",
     "test:circuit": "node --test tests/circuit.test.js",
     "test:hash": "node --test tests/hash.test.js",
-    "test:e2e": "node --test tests/e2e.test.js"
+    "test:e2e": "node --test tests/e2e.test.js",
+    "test:solidity": "node --test tests/solidity.test.js"
   },
   "keywords": [
     "zero-knowledge",
@@ -32,5 +33,7 @@
     "express": "^4.21.2",
     "snarkjs": "^0.7.5"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "solc": "^0.8.37"
+  }
 }

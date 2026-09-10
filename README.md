@@ -1,7 +1,8 @@
 # 🔐 Zero-Knowledge Multi-Image Keyfile 2FA
 
+[![CI Test Suite](https://github.com/De-violet/zk-multi-image-keyfile-2fa/actions/workflows/ci.yml/badge.svg)](https://github.com/De-violet/zk-multi-image-keyfile-2fa/actions/workflows/ci.yml)
 [![Live Web Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?style=for-the-badge&logo=github)](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)
-[![Tests](https://img.shields.io/badge/Tests-20%2F20%20Passing-success?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-26%2F26%20Passing-success?style=for-the-badge)](tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 
 **🌐 Coba Demo Langsung (Gratis di GitHub Pages):**  
@@ -20,11 +21,11 @@ Foto Anda **100% tidak pernah diunggah atau disimpan di server**. Browser WebAss
 Aplikasi ini dibagi menjadi 3 langkah berurutan:
 
 1. **1. Daftar Akun**  
-   Pengguna mendaftarkan username, password, dan memilih 3 foto pribadi dari perangkat. Browser menghitung *Root Commitment* secara lokal dengan salt deterministik per-user (`deriveSaltFromUsername`) dan menyimpannya di server sebagai pengaman akun. Sistem memproteksi pendaftaran ganda untuk mencegah *Account Takeover*.
+   Pengguna mendaftarkan username, password, dan memilih 3 foto pribadi dari perangkat. Browser menghitung *Root Commitment* secara lokal dengan salt deterministik per-user (`deriveSaltFromUsername`) dan menyimpannya di server sebagai pengaman akun. Pengguna juga dapat mengunduh salinan cadangan komitmen kriptografis (`.key`). Sistem memproteksi pendaftaran ganda untuk mencegah *Account Takeover*.
 2. **2. Login Akun & Pemulihan (Lupa Password)**  
-   - **Login Cepat Standar**: Masuk langsung menggunakan username dan password master (Faktor 1).
+   - **Login Cepat Standar**: Masuk langsung menggunakan username dan password master (Faktor 1 dengan PBKDF2 100.000 iterasi).
    - **Login 2FA Penuh (3 Foto Kunci)**: Aktifkan switch toggle 2FA untuk membuktikan kepemilikan 3 foto kunci secara kriptografis menggunakan Groth16 ZK-Proof sebelum sesi akses diterbitkan.
-   - **Skenario Lupa Password (Self-Sovereign Recovery)**: Pengguna dapat mereset password baru dengan membuktikan kepemilikan 3 foto kunci menggunakan ZK-Proof tanpa mengirim foto ke server. Endpoint recovery **tidak membocorkan Root Commitment maupun Salt** ke publik, menutup celah *offline dictionary attack*.
+   - **Skenario Lupa Password (Self-Sovereign Recovery)**: Pengguna dapat mereset password baru dengan membuktikan kepemilikan 3 foto kunci menggunakan ZK-Proof tanpa mengirim foto ke server. Seluruh endpoint publik **bebas dari kebocoran Root Commitment maupun Salt**, menutup celah *offline dictionary attack*.
 3. **3. Verifier (ZKP Lab)**  
    Laboratorium interaktif untuk menguji 3 pilar kriptografi ZKP:
    - **Witness**: Perhitungan saksi lokal dari 3 berkas foto.
@@ -53,7 +54,7 @@ git clone https://github.com/De-violet/zk-multi-image-keyfile-2fa.git
 # Masuk ke direktori proyek
 cd zk-multi-image-keyfile-2fa
 
-# Pasang seluruh dependensi (circomlib, snarkjs, express, cors)
+# Pasang seluruh dependensi (circomlib, snarkjs, express, cors, solc)
 npm install
 ```
 
@@ -64,7 +65,7 @@ npm install
 Repositori ini dilengkapi rangkaian pengujian otomatis (*automated testing*) menggunakan Node.js Native Test Runner (`node:test`):
 
 ```bash
-# Menjalankan seluruh 20 pengujian sekaligus
+# Menjalankan seluruh 26 pengujian sekaligus
 npm test
 ```
 
@@ -74,21 +75,25 @@ Anda juga dapat menjalankan pengujian secara modular:
 # 1. Uji Sirkuit ZKP & Pembuktian Groth16 (Valid proof, zero-noise tolerance, tamper detection)
 npm run test:circuit
 
-# 2. Uji Kriptografi Hash (Determinisme SHA-256 reduksi medan BN254, salt entropy, hierarki Poseidon)
+# 2. Uji Kriptografi Hash (Determinisme SHA-256 reduksi medan BN254, salt entropy, hierarki Poseidon, backup key)
 npm run test:hash
 
-# 3. Uji End-to-End Otentikasi & Keamanan (Register, challenge, verify, recovery leak protection, rate limiting)
+# 3. Uji End-to-End Otentikasi & Keamanan (Register, challenge, verify, anti-takeover, rate limiting terintegrasi)
 npm run test:e2e
+
+# 4. Uji Smart Contract Solidity (Kompilasi Groth16 Verifier & MultiImage2FAVault via solc)
+npm run test:solidity
 ```
 
 **Hasil Pengujian:**
 ```text
 ✔ Circom Circuit & Groth16 Proof Synthesis and Verification (1412 constraints)
 ✔ End-to-End Authentication & Attack Resistance Lifecycle
-✔ Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce)
+✔ Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce Terintegrasi)
 ✔ SHA-256 to BN254 Field Reduction Determinism
 ✔ Poseidon Hierarchical Commitment & Session Token
-ℹ tests 20 | pass 20 | fail 0
+✔ Solidity Smart Contract Tooling & Bytecode Verification (solc)
+ℹ tests 26 | pass 26 | fail 0
 ```
 
 ---

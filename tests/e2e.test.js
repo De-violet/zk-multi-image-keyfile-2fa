@@ -298,6 +298,27 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     const newLoginData = await newLoginRes.json();
     assert.equal(newLoginData.success, true);
   });
+
+  await t.test('Keamanan: Rate Limiter Terintegrasi Menggagalkan Flooding (HTTP 429)', async () => {
+    const floodUser = 'flood_target_victim';
+    // Endpoint /api/auth/recover-challenge memiliki batas 5 permintaan per menit
+    const requests = [];
+    for (let i = 0; i < 6; i++) {
+      requests.push(
+        fetch(`${baseUrl}/api/auth/recover-challenge`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: floodUser })
+        })
+      );
+    }
+    const responses = await Promise.all(requests);
+    const statuses = responses.map(r => r.status);
+    assert.ok(statuses.includes(429), 'Middleware rate limiter Express harus memblokir request ke-6 dengan HTTP 429');
+    const blockedRes = responses.find(r => r.status === 429);
+    const blockedBody = await blockedRes.json();
+    assert.match(blockedBody.error, /Terlalu banyak permintaan/i);
+  });
 });
 
 test('Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce)', async (t) => {

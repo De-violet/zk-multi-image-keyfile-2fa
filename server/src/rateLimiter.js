@@ -26,11 +26,6 @@ export function createRateLimiter({
   if (timer.unref) timer.unref();
 
   return (req, res, next) => {
-    // Lewati saat automated testing berjalan agar test suite tidak terhambat
-    if (process.env.NODE_ENV === 'test') {
-      return next();
-    }
-
     const ip = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip';
     const identifier = req.body?.username ? `${ip}_${req.body.username.toLowerCase()}` : ip;
     const now = Date.now();

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import { SNARK_SCALAR_FIELD } from '../server/src/nonceManager.js';
 import { getPoseidon, computeHierarchicalCommitment, computeSessionAuthToken } from '../client/src/crypto/poseidon.js';
-import { deriveSaltFromPassphrase, generateAutoSalt } from '../client/src/crypto/saltManager.js';
+import { deriveSaltFromPassphrase, generateAutoSalt, deriveSaltFromUsername, createBackupPayload } from '../client/src/crypto/saltManager.js';
 
 test('1. Determinisme Reduksi SHA-256 ke BN254 Scalar Field', async () => {
   const sampleData = Buffer.from('RAW_PIXEL_DATA_RGB_ENTROPY_SAMPLE_1');
@@ -54,4 +54,28 @@ test('3. Hierarki Hashing Poseidon (Image Key, Root Commitment, Session Token)',
   const h1Tampered = (BigInt(h1) + 1n).toString();
   const tampered = await computeHierarchicalCommitment(h1Tampered, h2, h3, salt);
   assert.notEqual(rootCommitment, tampered.rootCommitment, '1 bit perubahan pada gambar wajib mengubah total root commitment (Zero-Noise Tolerance)');
+});
+
+test('4. Derivasi Salt Deterministik per Username (Zero Network Salt Leakage)', async () => {
+  const user1 = 'alexander';
+  const user2 = 'ALEXANDER ';
+  const user3 = 'bertrand';
+
+  const salt1 = await deriveSaltFromUsername(user1);
+  const salt2 = await deriveSaltFromUsername(user2);
+  const salt3 = await deriveSaltFromUsername(user3);
+
+  assert.equal(salt1.fieldElement, salt2.fieldElement, 'Derivasi harus case-insensitive dan trimmed');
+  assert.notEqual(salt1.fieldElement, salt3.fieldElement, 'Username berbeda harus menghasilkan salt berbeda');
+  assert.ok(BigInt(salt1.fieldElement) < SNARK_SCALAR_FIELD, 'Salt harus valid dalam domain BN254');
+});
+
+test('5. Validasi Struktur Sertifikat Kunci Cadangan (createBackupPayload)', () => {
+  const payload = createBackupPayload('cybernaut', '1234567890', '9876543210');
+  assert.equal(payload.standard, 'Zero-Knowledge Multi-Image Keyfile 2FA');
+  assert.equal(payload.version, '1.0.0');
+  assert.equal(payload.username, 'cybernaut');
+  assert.equal(payload.salt, '1234567890');
+  assert.equal(payload.rootCommitment, '9876543210');
+  assert.ok(payload.notice, 'Notice harus ada');
 });

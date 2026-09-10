@@ -8,7 +8,7 @@ function hashPassword(password, salt) {
   if (!salt) {
     return crypto.createHash('sha256').update(password).digest('hex');
   }
-  return crypto.pbkdf2Sync(password, salt, 10000, 32, 'sha256').toString('hex');
+  return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
 }
 
 export const authController = {

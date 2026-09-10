@@ -1,5 +1,5 @@
 import { hashFileDeterministic } from './crypto/fileHash.js';
-import { generateAutoSalt, deriveSaltFromUsername } from './crypto/saltManager.js';
+import { generateAutoSalt, deriveSaltFromUsername, downloadBackupKey } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof, verifyZkProof } from './crypto/zkProver.js';
 
@@ -55,7 +55,7 @@ const localMockDB = {
       {
         name: 'PBKDF2',
         salt: enc.encode(salt),
-        iterations: 10000,
+        iterations: 100000,
         hash: 'SHA-256'
       },
       key,
@@ -220,10 +220,18 @@ function setupSlot(mode, index) {
     slot.classList.add('filled');
     const reader = new FileReader();
     reader.onload = (evt) => {
-      preview.innerHTML = `
-        <img src="${evt.target.result}" class="slot-img-preview" alt="${file.name}">
-        <span style="position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${file.name}</span>
-      `;
+      preview.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = evt.target.result;
+      img.className = 'slot-img-preview';
+      img.alt = file.name;
+
+      const span = document.createElement('span');
+      span.style.cssText = 'position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+      span.textContent = file.name;
+
+      preview.appendChild(img);
+      preview.appendChild(span);
     };
     reader.readAsDataURL(file);
   });
@@ -261,11 +269,21 @@ function updateLabFileDetails() {
   }
 
   details.style.display = 'flex';
-  details.innerHTML = state.labFiles.map((f, i) => {
-    if (!f) return `<div>• Foto ${i + 1}: <span style="color:#71717a; font-style:italic;">Belum dipilih</span></div>`;
-    const sizeKb = (f.size / 1024).toFixed(1);
-    return `<div>• Foto ${i + 1}: <strong>${f.name}</strong> (${sizeKb} KB)</div>`;
-  }).join('');
+  details.innerHTML = '';
+  state.labFiles.forEach((f, i) => {
+    const item = document.createElement('div');
+    if (!f) {
+      item.innerHTML = `• Foto ${i + 1}: <span style="color:#71717a; font-style:italic;">Belum dipilih</span>`;
+    } else {
+      const sizeKb = (f.size / 1024).toFixed(1);
+      item.textContent = `• Foto ${i + 1}: `;
+      const strong = document.createElement('strong');
+      strong.textContent = f.name;
+      item.appendChild(strong);
+      item.appendChild(document.createTextNode(` (${sizeKb} KB)`));
+    }
+    details.appendChild(item);
+  });
 }
 
 function resetLabPipeline() {
@@ -467,12 +485,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       showStatus('regStatus', 'success', `✓ Akun "${username}" berhasil didaftarkan! Mengalihkan ke Langkah 2: Login Akun...`);
 
+      const btnBackup = document.getElementById('btnDownloadBackupKey');
+      if (btnBackup) {
+        btnBackup.style.display = 'block';
+        btnBackup.onclick = () => {
+          downloadBackupKey(username, saltObj.fieldElement, rootCommitment);
+        };
+      }
+
       setTimeout(() => {
         showLoginTab();
         document.getElementById('loginUsername').value = username;
         document.getElementById('loginPassword').value = '';
         showStatus('loginStatus', 'info', `Akun "${username}" siap. Silakan masukkan password Anda untuk masuk.`);
-      }, 1200);
+      }, 1500);
 
     } catch (err) {
       showStatus('regStatus', 'error', err.message || 'Terjadi kesalahan saat pendaftaran.');
@@ -570,7 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (!zkpResult.success) {
-          showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini!');
+          showStatus('loginStatus', 'error', '❌ Gagal menyintesis bukti ZKP di browser: ' + (zkpResult.error || 'Periksa integritas berkas WASM/zkey.'));
           return;
         }
 
@@ -591,7 +617,7 @@ document.addEventListener('DOMContentLoaded', () => {
           });
           const verifyData = await verifyRes.json();
           if (!verifyRes.ok) {
-            showStatus('loginStatus', 'error', verifyData.error || 'Bukti ZK 3 Foto ditolak oleh server.');
+            showStatus('loginStatus', 'error', verifyData.error || '❌ Verifikasi ZKP Ditolak Server: Foto yang diunggah tidak cocok dengan 3 foto kunci 2FA yang terdaftar.');
             return;
           }
           authResult = verifyData;
@@ -759,7 +785,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (!zkpResult.success) {
-        showStatus('recoverStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini! Pemulihan dibatalkan.');
+        showStatus('recoverStatus', 'error', '❌ Gagal menyintesis bukti ZKP di browser: ' + (zkpResult.error || 'Periksa integritas berkas WASM/zkey.'));
         return;
       }
 
@@ -781,7 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const resetData = await resetRes.json();
         if (!resetRes.ok) {
-          showStatus('recoverStatus', 'error', resetData.error || 'Gagal mereset password.');
+          showStatus('recoverStatus', 'error', resetData.error || '❌ Verifikasi ZKP Ditolak Server: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini.');
           return;
         }
       } else {

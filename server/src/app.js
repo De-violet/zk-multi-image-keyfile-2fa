@@ -13,13 +13,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Sajikan file statis frontend dari folder client
+// Sajikan file statis frontend dari folder client (vendor browser mandiri sudah ada di client/public/vendor)
 const clientPath = path.join(__dirname, '../../client');
 app.use(express.static(clientPath));
-
-// Sajikan node_modules snarkjs dan circomlibjs agar browser dapat memuatnya
-const nodeModulesPath = path.join(__dirname, '../../node_modules');
-app.use('/vendor', express.static(nodeModulesPath));
 
 // Sajikan artefak sirkuit ZKP (WASM, zkey, vkey)
 const zkArtifactsPath = path.join(__dirname, '../../circuits/build');
