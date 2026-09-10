@@ -1,10 +1,10 @@
 {
   "cybernaut_01": {
     "username": "cybernaut_01",
-    "passwordHash": "1c1ca84199c2cd84f80a0ff700f6cf9ecdbf7c779750afa4af91a68df2deb7b3",
-    "passwordSalt": "61b133ee545814fb2a2211c27cb371cd",
-    "rootCommitment": "12963383061905964412472083696647913008476731980858938193658575849579562389379",
+    "passwordHash": "24c0e50b3ef0934657c4fe90ab8dcaafb5a7482fa51fe1711ceeddf41cce5601",
+    "passwordSalt": "f12f9660c9abaab036fc18ea0d183618",
+    "rootCommitment": "8408963584813956225857845283974074646740805498027394478208230702202712612960",
     "salt2fa": "0",
-    "createdAt": "2026-09-10T13:46:45.095Z"
+    "createdAt": "2026-09-10T14:28:28.033Z"
   }
 }

@@ -819,6 +819,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('loginPassword').value = '';
     resetSlots('login');
+    const check2fa = document.getElementById('checkEnable2FALogin');
+    const container2fa = document.getElementById('login2faSlotsContainer');
+    if (check2fa) check2fa.checked = false;
+    if (container2fa) container2fa.style.display = 'none';
     showLoginTab();
     showStatus('loginStatus', 'info', 'Anda telah keluar. Silakan masukkan username & password untuk masuk kembali.');
   });

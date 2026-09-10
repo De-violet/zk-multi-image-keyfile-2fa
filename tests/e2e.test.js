@@ -94,6 +94,16 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     assert.ok(data.error.includes('sudah terdaftar'), 'Pesan error harus menyatakan username sudah terdaftar');
   });
 
+  await t.test('Keamanan: Endpoint getUserStatus TIDAK Membocorkan rootCommitment atau salt2fa', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/user/${username}`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.exists, true);
+    assert.equal(data.username, username);
+    assert.equal(data.rootCommitment, undefined, 'rootCommitment TIDAK BOLEH dibocorkan di endpoint status user publik');
+    assert.equal(data.salt2fa, undefined, 'salt2fa TIDAK BOLEH dibocorkan di endpoint status user publik');
+  });
+
   let sessionNonce;
 
   await t.test('Fase 2: Permintaan Tantangan 2FA (Challenge Request)', async () => {

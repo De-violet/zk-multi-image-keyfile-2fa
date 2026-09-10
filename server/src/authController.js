@@ -296,6 +296,7 @@ export const authController = {
 
   /**
    * Status akun untuk demo frontend
+   * Hanya mengembalikan status keberadaan akun dan timestamp (TIDAK membocorkan commitment)
    */
   async getUserStatus(req, res) {
     const { username } = req.params;
@@ -306,7 +307,6 @@ export const authController = {
     return res.json({
       exists: true,
       username: user.username,
-      rootCommitment: user.rootCommitment,
       createdAt: user.createdAt
     });
   }

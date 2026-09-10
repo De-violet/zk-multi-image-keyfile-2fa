@@ -47,7 +47,7 @@ app.post('/api/auth/challenge', authLimiter, authController.challenge);
 app.post('/api/auth/verify-2fa', authLimiter, authController.verify2fa);
 app.post('/api/auth/recover-challenge', recoveryLimiter, authController.recoverChallenge);
 app.post('/api/auth/recover-reset', recoveryLimiter, authController.recoverReset);
-app.get('/api/auth/user/:username', authController.getUserStatus);
+app.get('/api/auth/user/:username', authLimiter, authController.getUserStatus);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

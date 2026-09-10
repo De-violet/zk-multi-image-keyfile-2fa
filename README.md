@@ -1,7 +1,7 @@
 # 🔐 Zero-Knowledge Multi-Image Keyfile 2FA
 
 [![Live Web Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?style=for-the-badge&logo=github)](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)
-[![Tests](https://img.shields.io/badge/Tests-19%2F19%20Passing-success?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-20%2F20%20Passing-success?style=for-the-badge)](tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 
 **🌐 Coba Demo Langsung (Gratis di GitHub Pages):**  
@@ -64,7 +64,7 @@ npm install
 Repositori ini dilengkapi rangkaian pengujian otomatis (*automated testing*) menggunakan Node.js Native Test Runner (`node:test`):
 
 ```bash
-# Menjalankan seluruh 19 pengujian sekaligus
+# Menjalankan seluruh 20 pengujian sekaligus
 npm test
 ```
 
@@ -88,7 +88,7 @@ npm run test:e2e
 ✔ Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce)
 ✔ SHA-256 to BN254 Field Reduction Determinism
 ✔ Poseidon Hierarchical Commitment & Session Token
-ℹ tests 19 | pass 19 | fail 0
+ℹ tests 20 | pass 20 | fail 0
 ```
 
 ---
@@ -143,8 +143,8 @@ Sistem ini menggunakan skema pembuktian **Groth16 zk-SNARKs**, yang memerlukan d
    PUBLIC_PTAU_PATH=./powersOfTau28_hez_final_12.ptau npm run compile:circuit
    ```
    *Pada lingkungan produksi, gunakan file PTAU publik terverifikasi dan jalankan upacara MPC Fase 2 multi-partisipan untuk menjamin asumsi 1-of-N honest participant.*
-5. **Pencegahan Offline Dictionary Attack (No Commitment Leak)**:
-   Endpoint `/api/auth/recover-challenge` **tidak mengembalikan `rootCommitment` maupun `salt2fa`**. Salt diturunkan secara deterministik dari username (`deriveSaltFromUsername`) dan tertanam di dalam komitmen lokal. Penyerang publik tidak dapat memanen komitmen akar untuk melancarkan serangan kamus offline terhadap foto korban.
+5. **Pencegahan Offline Dictionary Attack (Total Zero Commitment Leakage)**:
+   Endpoint publik `/api/auth/recover-challenge` dan `/api/auth/user/:username` **tidak pernah mengembalikan `rootCommitment` maupun `salt2fa`**. Salt diturunkan secara deterministik dari username (`deriveSaltFromUsername`) dan tertanam di dalam komitmen lokal. Penyerang publik sama sekali tidak memiliki akses terhadap target commitment untuk melancarkan serangan kamus offline terhadap foto korban.
 6. **Mitigasi Account Takeover**:
    Endpoint registrasi menolak pendaftaran ganda (`409 Conflict`) jika username sudah terdaftar, mencegah penyerang menimpa komitmen atau password akun yang ada.
 7. **Perlindungan Brute-Force (Rate Limiting)**:
