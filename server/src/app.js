@@ -25,13 +25,28 @@ app.use('/vendor', express.static(nodeModulesPath));
 const zkArtifactsPath = path.join(__dirname, '../../circuits/build');
 app.use('/zk', express.static(zkArtifactsPath));
 
+import { createRateLimiter } from './rateLimiter.js';
+
+// Rate Limiter untuk melindungi dari brute-force dan offline commitment harvesting
+const authLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 15,
+  message: 'Terlalu banyak percobaan otentikasi. Silakan tunggu 1 menit.'
+});
+
+const recoveryLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  maxRequests: 5,
+  message: 'Terlalu banyak permintaan sesi pemulihan akun. Silakan tunggu 1 menit.'
+});
+
 // API Routes
-app.post('/api/auth/register', authController.register);
-app.post('/api/auth/login', authController.login);
-app.post('/api/auth/challenge', authController.challenge);
-app.post('/api/auth/verify-2fa', authController.verify2fa);
-app.post('/api/auth/recover-challenge', authController.recoverChallenge);
-app.post('/api/auth/recover-reset', authController.recoverReset);
+app.post('/api/auth/register', authLimiter, authController.register);
+app.post('/api/auth/login', authLimiter, authController.login);
+app.post('/api/auth/challenge', authLimiter, authController.challenge);
+app.post('/api/auth/verify-2fa', authLimiter, authController.verify2fa);
+app.post('/api/auth/recover-challenge', recoveryLimiter, authController.recoverChallenge);
+app.post('/api/auth/recover-reset', recoveryLimiter, authController.recoverReset);
 app.get('/api/auth/user/:username', authController.getUserStatus);
 
 // Health check endpoint

@@ -1,7 +1,7 @@
 # 🔐 Zero-Knowledge Multi-Image Keyfile 2FA
 
 [![Live Web Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-brightgreen?style=for-the-badge&logo=github)](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)
-[![Tests](https://img.shields.io/badge/Tests-14%2F14%20Passing-success?style=for-the-badge)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-19%2F19%20Passing-success?style=for-the-badge)](tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-white?style=for-the-badge)](LICENSE)
 
 **🌐 Coba Demo Langsung (Gratis di GitHub Pages):**  
@@ -20,10 +20,11 @@ Foto Anda **100% tidak pernah diunggah atau disimpan di server**. Browser WebAss
 Aplikasi ini dibagi menjadi 3 langkah berurutan:
 
 1. **1. Daftar Akun**  
-   Pengguna mendaftarkan username, password, dan memilih 3 foto pribadi dari perangkat. Browser menghitung *Root Commitment* secara lokal dan menyimpannya di server sebagai pengaman akun.
+   Pengguna mendaftarkan username, password, dan memilih 3 foto pribadi dari perangkat. Browser menghitung *Root Commitment* secara lokal dengan salt deterministik per-user (`deriveSaltFromUsername`) dan menyimpannya di server sebagai pengaman akun. Sistem memproteksi pendaftaran ganda untuk mencegah *Account Takeover*.
 2. **2. Login Akun & Pemulihan (Lupa Password)**  
-   - **Login Harian**: Cukup masukkan username dan password akun Anda.
-   - **Skenario Lupa Password**: Pengguna dapat mereset password baru dengan membuktikan kepemilikan 3 foto kunci menggunakan ZK-Proof tanpa mengirim foto ke server.
+   - **Login Cepat Standar**: Masuk langsung menggunakan username dan password master (Faktor 1).
+   - **Login 2FA Penuh (3 Foto Kunci)**: Aktifkan switch toggle 2FA untuk membuktikan kepemilikan 3 foto kunci secara kriptografis menggunakan Groth16 ZK-Proof sebelum sesi akses diterbitkan.
+   - **Skenario Lupa Password (Self-Sovereign Recovery)**: Pengguna dapat mereset password baru dengan membuktikan kepemilikan 3 foto kunci menggunakan ZK-Proof tanpa mengirim foto ke server. Endpoint recovery **tidak membocorkan Root Commitment maupun Salt** ke publik, menutup celah *offline dictionary attack*.
 3. **3. Verifier (ZKP Lab)**  
    Laboratorium interaktif untuk menguji 3 pilar kriptografi ZKP:
    - **Witness**: Perhitungan saksi lokal dari 3 berkas foto.
@@ -63,7 +64,7 @@ npm install
 Repositori ini dilengkapi rangkaian pengujian otomatis (*automated testing*) menggunakan Node.js Native Test Runner (`node:test`):
 
 ```bash
-# Menjalankan seluruh 14 pengujian sekaligus
+# Menjalankan seluruh 19 pengujian sekaligus
 npm test
 ```
 
@@ -76,7 +77,7 @@ npm run test:circuit
 # 2. Uji Kriptografi Hash (Determinisme SHA-256 reduksi medan BN254, salt entropy, hierarki Poseidon)
 npm run test:hash
 
-# 3. Uji End-to-End Otentikasi & Serangan (Register, challenge, verify, replay attack, expired nonce)
+# 3. Uji End-to-End Otentikasi & Keamanan (Register, challenge, verify, recovery leak protection, rate limiting)
 npm run test:e2e
 ```
 
@@ -84,9 +85,10 @@ npm run test:e2e
 ```text
 ✔ Circom Circuit & Groth16 Proof Synthesis and Verification (1412 constraints)
 ✔ End-to-End Authentication & Attack Resistance Lifecycle
+✔ Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce)
 ✔ SHA-256 to BN254 Field Reduction Determinism
 ✔ Poseidon Hierarchical Commitment & Session Token
-ℹ tests 14 | pass 14 | fail 0
+ℹ tests 19 | pass 19 | fail 0
 ```
 
 ---
@@ -132,7 +134,7 @@ Sistem ini menggunakan skema pembuktian **Groth16 zk-SNARKs**, yang memerlukan d
 > **Bahaya Entropi Statis / Hardcoded:**  
 > Parameter rahasia sementara yang dihasilkan saat proses setup disebut sebagai ***toxic waste*** (trapdoor: $\alpha, \beta, \gamma, \delta, x$). Jika nilai entropi yang dimasukkan ke dalam setup di-hardcode dalam repositori publik, pihak luar dapat merekonstruksi trapdoor tersebut dan memalsukan bukti ZK valid untuk `rootCommitment` milik akun manapun tanpa pernah memiliki foto kuncinya.
 
-### Mitigasi yang Diterapkan di Proyek Ini:
+### Arsitektur Keamanan & Mitigasi Serangan (Security Hardening):
 1. **Peniadaan Hardcode Entropi**: Flag plaintext `-e="..."` telah dihapus dari `circuits/scripts/compile.sh`.
 2. **Mode Interaktif Dinamis**: Saat dijalankan di terminal, `snarkjs` akan meminta input entropi keyboard acak rahasia langsung dari pengguna.
 3. **Fallback CSPRNG Non-Interaktif**: Pada lingkungan non-interaktif (seperti CI/CD), skrip mengambil entropi acak kriptografis langsung dari `/dev/urandom` sistem operasi dan segera menghapus variabelnya dari memori.
@@ -141,6 +143,14 @@ Sistem ini menggunakan skema pembuktian **Groth16 zk-SNARKs**, yang memerlukan d
    PUBLIC_PTAU_PATH=./powersOfTau28_hez_final_12.ptau npm run compile:circuit
    ```
    *Pada lingkungan produksi, gunakan file PTAU publik terverifikasi dan jalankan upacara MPC Fase 2 multi-partisipan untuk menjamin asumsi 1-of-N honest participant.*
+5. **Pencegahan Offline Dictionary Attack (No Commitment Leak)**:
+   Endpoint `/api/auth/recover-challenge` **tidak mengembalikan `rootCommitment` maupun `salt2fa`**. Salt diturunkan secara deterministik dari username (`deriveSaltFromUsername`) dan tertanam di dalam komitmen lokal. Penyerang publik tidak dapat memanen komitmen akar untuk melancarkan serangan kamus offline terhadap foto korban.
+6. **Mitigasi Account Takeover**:
+   Endpoint registrasi menolak pendaftaran ganda (`409 Conflict`) jika username sudah terdaftar, mencegah penyerang menimpa komitmen atau password akun yang ada.
+7. **Perlindungan Brute-Force (Rate Limiting)**:
+   Dilengkapi *Sliding Window Rate Limiter* (15 req/menit untuk auth, 5 req/menit untuk recovery) guna mencegah serangan *credential stuffing* dan eksploitasi sesi.
+8. **Opsi Login 2FA Penuh (Dual-Factor Verification)**:
+   Antarmuka web menyediakan toggle "Proteksi 2FA Penuh (3 Foto Kunci)" yang menjalankan verifikasi dua lapis secara nyata: validasi password (F1) via `/challenge` dan validasi ZK-Proof 3 foto (F2) via `/verify-2fa`.
 
 ---
 

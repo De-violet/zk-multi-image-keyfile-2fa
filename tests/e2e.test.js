@@ -9,6 +9,7 @@ import { db } from '../server/src/db.js';
 import { nonceManager, SNARK_SCALAR_FIELD } from '../server/src/nonceManager.js';
 import { computeHierarchicalCommitment, computeSessionAuthToken } from '../client/src/crypto/poseidon.js';
 import { generateAutoSalt } from '../client/src/crypto/saltManager.js';
+import { createRateLimiter } from '../server/src/rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +76,22 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     assert.equal(data.success, true);
     assert.equal(data.user.username, username);
     assert.equal(data.user.rootCommitment, rootCommitment);
+  });
+
+  await t.test('Keamanan: Registrasi Menolak Akun Existing (Cegah Takeover)', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        password: 'AttackerNewPassword123!',
+        rootCommitment: '999999999'
+      })
+    });
+
+    assert.equal(res.status, 409, 'Pendaftaran ulang username yang sama harus ditolak (409 Conflict)');
+    const data = await res.json();
+    assert.ok(data.error.includes('sudah terdaftar'), 'Pesan error harus menyatakan username sudah terdaftar');
   });
 
   let sessionNonce;
@@ -192,4 +209,129 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     const data = await res.json();
     assert.match(data.error, /expired/i, 'Harus menyatakan nonce expired');
   });
+
+  let recoverNonce;
+  let recoverProof;
+  let recoverAuthToken;
+  const newPassword = 'BrandNewSecurePassword456!';
+
+  await t.test('Keamanan: Endpoint recover-challenge TIDAK Membocorkan rootCommitment atau salt2fa', async () => {
+    const res = await fetch(`${baseUrl}/api/auth/recover-challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username })
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.ok(data.sessionNonce, 'Server harus menerbitkan sessionNonce');
+    assert.equal(data.rootCommitment, undefined, 'rootCommitment TIDAK BOLEH dikembalikan pada endpoint recovery publik');
+    assert.equal(data.salt2fa, undefined, 'salt2fa TIDAK BOLEH dikembalikan pada endpoint recovery publik');
+
+    recoverNonce = data.sessionNonce;
+  });
+
+  await t.test('Pemulihan Akun: Sintesis Proof ZKP 3 Foto & Eksekusi Reset Password', async () => {
+    // Klien menghitung proof secara lokal dari 3 foto kunci miliknya
+    const circuitInputs = {
+      h1,
+      h2,
+      h3,
+      salt,
+      rootCommitment,
+      sessionNonce: recoverNonce
+    };
+
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInputs,
+      WASM_PATH,
+      ZKEY_PATH
+    );
+
+    recoverProof = proof;
+    recoverAuthToken = publicSignals[0];
+
+    const res = await fetch(`${baseUrl}/api/auth/recover-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username,
+        sessionNonce: recoverNonce,
+        sessionAuthToken: recoverAuthToken,
+        proof: recoverProof,
+        newPassword
+      })
+    });
+
+    assert.equal(res.status, 200, 'Server harus menerima reset password via valid ZKP');
+    const data = await res.json();
+    assert.equal(data.success, true);
+  });
+
+  await t.test('Verifikasi: Login dengan Password Baru Berhasil dan Password Lama Ditolak', async () => {
+    // 1. Password lama harus ditolak
+    const oldLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    assert.equal(oldLoginRes.status, 401, 'Password lama harus ditolak');
+
+    // 2. Password baru harus berhasil
+    const newLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password: newPassword })
+    });
+    assert.equal(newLoginRes.status, 200, 'Login dengan password baru harus berhasil');
+    const newLoginData = await newLoginRes.json();
+    assert.equal(newLoginData.success, true);
+  });
 });
+
+test('Proteksi Rate Limiting (Sliding Window & Anti-Bruteforce)', async (t) => {
+  const limiter = createRateLimiter({
+    windowMs: 5000,
+    maxRequests: 3,
+    message: 'Rate limit tercapai. Harap tunggu.'
+  });
+
+  const prevEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+
+  try {
+    let callCount = 0;
+    const mockNext = () => { callCount++; };
+    const mockReq = {
+      ip: '127.0.0.1',
+      body: { username: 'test_victim' }
+    };
+    let lastStatus = null;
+    let lastBody = null;
+    const mockRes = {
+      setHeader: () => {},
+      status: (code) => {
+        lastStatus = code;
+        return {
+          json: (body) => { lastBody = body; }
+        };
+      }
+    };
+
+    // Panggilan 1, 2, 3 harus diizinkan
+    limiter(mockReq, mockRes, mockNext);
+    limiter(mockReq, mockRes, mockNext);
+    limiter(mockReq, mockRes, mockNext);
+    assert.equal(callCount, 3, '3 permintaan pertama harus diizinkan');
+
+    // Panggilan ke-4 harus diblokir (429 Too Many Requests)
+    limiter(mockReq, mockRes, mockNext);
+    assert.equal(callCount, 3, 'Permintaan ke-4 tidak boleh lolos ke next()');
+    assert.equal(lastStatus, 429, 'Harus mengembalikan HTTP 429');
+    assert.equal(lastBody.error, 'Rate limit tercapai. Harap tunggu.');
+  } finally {
+    process.env.NODE_ENV = prevEnv;
+  }
+});
+

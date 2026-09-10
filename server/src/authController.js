@@ -14,16 +14,27 @@ function hashPassword(password, salt) {
 export const authController = {
   /**
    * Registrasi Akun Baru (Fase 1)
-   * User mendaftarkan password (F1), Root Commitment (F2), dan salt2fa
-   * Diizinkan overwrite agar pengujian portofolio/demo tidak terhalang akun lama
+   * User mendaftarkan password (F1), Root Commitment (F2), dan salt2fa.
+   * Menolak jika username sudah terdaftar untuk mencegah Account Takeover.
+   * Overwrite hanya diizinkan jika mode demo aktif secara eksplisit (DEMO_MODE=true / ALLOW_DEMO_OVERWRITE=true).
    */
   async register(req, res) {
     try {
-      const { username, password, rootCommitment, salt2fa } = req.body;
+      const { username, password, rootCommitment, salt2fa, allowOverwrite } = req.body;
 
       if (!username || !password || !rootCommitment) {
         return res.status(400).json({
           error: 'Parameter tidak lengkap. Diperlukan: username, password, rootCommitment.'
+        });
+      }
+
+      // Cegah Account Takeover: Tolak jika username sudah terdaftar
+      const isDemoMode = process.env.DEMO_MODE === 'true' || process.env.ALLOW_DEMO_OVERWRITE === 'true';
+      const permitsOverwrite = isDemoMode && allowOverwrite === true;
+
+      if (db.userExists(username) && !permitsOverwrite) {
+        return res.status(409).json({
+          error: `Username "${username}" sudah terdaftar. Silakan gunakan username lain atau gunakan fitur pemulihan akun jika lupa password.`
         });
       }
 
@@ -206,13 +217,13 @@ export const authController = {
 
       const challenge = nonceManager.issueNonce(user.username);
 
+      // Kriptografi Aman: JANGAN bocorkan rootCommitment atau salt2fa ke publik tanpa autentikasi!
+      // Mencegah penyerang mendapatkan target commitment untuk serangan kamus offline.
       return res.json({
         success: true,
         sessionNonce: challenge.sessionNonce,
         expiresIn: challenge.expiresIn,
-        expiresAt: challenge.expiresAt,
-        rootCommitment: user.rootCommitment,
-        salt2fa: user.salt2fa || '0'
+        expiresAt: challenge.expiresAt
       });
     } catch (err) {
       console.error('[RecoverChallenge Error]:', err);
