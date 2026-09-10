@@ -16,6 +16,24 @@ export function generateAutoSalt() {
 }
 
 /**
+ * Derivasi Salt deterministik per username menggunakan SHA-256 modulo BN254
+ * Mengunci salt unik per pengguna sehingga server tidak perlu membocorkan salt2fa via network
+ */
+export async function deriveSaltFromUsername(username) {
+  const cleanUser = (username || '').trim().toLowerCase();
+  const encoder = new TextEncoder();
+  const rawBytes = encoder.encode(`ZK2FA_USER_SALT_ROOT_${cleanUser}`);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', rawBytes);
+  const hex = bufferToHex(hashBuffer);
+  const fieldElement = (BigInt('0x' + hex) % SNARK_SCALAR_FIELD).toString();
+
+  return {
+    rawHex: hex,
+    fieldElement
+  };
+}
+
+/**
  * Derivasi Salt dari Passphrase / PIN kustom menggunakan PBKDF2-HMAC-SHA256 (100.000 iterasi)
  * Menutup celah entropi rendah terhadap rainbow table / brute force
  */

@@ -1,5 +1,5 @@
 import { hashFileDeterministic } from './crypto/fileHash.js';
-import { generateAutoSalt } from './crypto/saltManager.js';
+import { generateAutoSalt, deriveSaltFromUsername } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof, verifyZkProof } from './crypto/zkProver.js';
 
@@ -64,8 +64,11 @@ const localMockDB = {
     return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
   },
 
-  async register(username, password, rootCommitment, salt2fa) {
+  async register(username, password, rootCommitment, salt2fa, allowOverwrite = false) {
     const key = username.toLowerCase();
+    if (this.users.has(key) && !allowOverwrite) {
+      throw new Error(`Username "${username}" sudah terdaftar. Silakan gunakan username lain atau gunakan fitur pemulihan akun jika lupa password.`);
+    }
     const passwordSalt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
     const passwordHash = await this.hashPassword(password, passwordSalt);
     this.users.set(key, {
@@ -88,6 +91,51 @@ const localMockDB = {
     return { success: true, user };
   },
 
+  async challenge(username, password) {
+    const key = username.toLowerCase();
+    const user = this.users.get(key);
+    if (!user) throw new Error('Akun tidak ditemukan. Silakan daftar di Langkah 1 terlebih dahulu.');
+    const hash = await this.hashPassword(password, user.passwordSalt);
+    if (hash !== user.passwordHash) throw new Error('Password salah. Gunakan opsi "Lupa Password" jika Anda lupa.');
+
+    const rand = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+    const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+    const sessionNonce = (BigInt('0x' + rand) % BN254_R).toString();
+    this.activeNonces.set(key, sessionNonce);
+    return {
+      success: true,
+      sessionNonce,
+      expiresIn: 60,
+      user
+    };
+  },
+
+  async verify2fa(username, sessionNonce, sessionAuthToken, proof) {
+    const key = username.toLowerCase();
+    const user = this.users.get(key);
+    if (!user) throw new Error('Akun tidak ditemukan.');
+    const active = this.activeNonces.get(key);
+    if (active !== sessionNonce) throw new Error('Sesi 2FA tidak valid atau kedaluwarsa.');
+    this.activeNonces.delete(key);
+
+    let vKey = state.labVKey;
+    if (!vKey) {
+      const vKeyRes = await fetch('./public/zk/verification_key.json').catch(() => fetch('/public/zk/verification_key.json'));
+      vKey = await vKeyRes.json();
+      state.labVKey = vKey;
+    }
+
+    const publicSignals = [sessionAuthToken, user.rootCommitment, sessionNonce];
+    const isValid = await verifyZkProof(vKey, publicSignals, proof);
+    if (!isValid) throw new Error('Bukti ZKP 3 Foto Kunci Ditolak! Foto tidak cocok.');
+
+    return {
+      success: true,
+      message: 'Verifikasi ZK-Proof 3 Kunci Foto Berhasil!',
+      user
+    };
+  },
+
   async recoverChallenge(username) {
     const key = username.toLowerCase();
     const user = this.users.get(key);
@@ -98,9 +146,7 @@ const localMockDB = {
     this.activeNonces.set(key, sessionNonce);
     return {
       success: true,
-      sessionNonce,
-      rootCommitment: user.rootCommitment,
-      salt2fa: user.salt2fa
+      sessionNonce
     };
   },
 
@@ -185,9 +231,9 @@ function setupSlot(mode, index) {
 
 function resetSlots(mode) {
   [0, 1, 2].forEach(i => {
-    const slot = document.getElementById(`${mode}Slot${index + 1}`);
-    const input = document.getElementById(`${mode}File${index + 1}`);
-    const preview = document.getElementById(`${mode}Preview${index + 1}`);
+    const slot = document.getElementById(`${mode}Slot${i + 1}`);
+    const input = document.getElementById(`${mode}File${i + 1}`);
+    const preview = document.getElementById(`${mode}Preview${i + 1}`);
 
     if (input) input.value = '';
     if (slot) slot.classList.remove('filled');
@@ -340,6 +386,15 @@ document.addEventListener('DOMContentLoaded', () => {
     hideStatus('recoverStatus');
   });
 
+  // Toggle Slot 2FA Login
+  const checkEnable2FALogin = document.getElementById('checkEnable2FALogin');
+  const login2faSlotsContainer = document.getElementById('login2faSlotsContainer');
+  if (checkEnable2FALogin && login2faSlotsContainer) {
+    checkEnable2FALogin.addEventListener('change', () => {
+      login2faSlotsContainer.style.display = checkEnable2FALogin.checked ? 'block' : 'none';
+    });
+  }
+
   // Default: Buka langkah 1 (Daftar Akun)
   showRegisterTab();
 
@@ -375,7 +430,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
-      const saltObj = generateAutoSalt();
+      // Salt deterministik unik per username (tertanam aman di dalam commitment)
+      const saltObj = await deriveSaltFromUsername(username);
 
       const { rootCommitment } = await computeHierarchicalCommitment(
         h1.fieldElement,
@@ -419,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }, 1200);
 
     } catch (err) {
-      showStatus('regStatus', 'error', 'Terjadi kesalahan: ' + err.message);
+      showStatus('regStatus', 'error', err.message || 'Terjadi kesalahan saat pendaftaran.');
     } finally {
       btn.disabled = false;
       btnText.textContent = '1. Daftarkan Akun & Kunci 2FA';
@@ -428,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 2. LOGIN AKUN (STANDAR USERNAME & PASSWORD)
+  // 2. LOGIN AKUN (STANDAR PASSWORD ATAU 2FA PENUH)
   // ==========================================
   formLogin.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -436,6 +492,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
+    const is2FAEnabled = checkEnable2FALogin && checkEnable2FALogin.checked;
 
     if (!username || !password) {
       showStatus('loginStatus', 'error', 'Masukkan username dan password Anda.');
@@ -447,50 +504,167 @@ document.addEventListener('DOMContentLoaded', () => {
     const spinner = btn.querySelector('.spinner');
 
     btn.disabled = true;
-    btnText.textContent = 'Memverifikasi...';
     spinner.style.display = 'block';
 
     const startTime = performance.now();
 
     try {
       const backend = await hasBackend();
-      let authUser;
 
-      if (backend) {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password })
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          showStatus('loginStatus', 'error', data.error || 'Username atau password salah.');
+      if (is2FAEnabled) {
+        // --- JALUR LOGIN 2FA LENGKAP VIA 3 FOTO KUNCI ZKP ---
+        const [f1, f2, f3] = state.loginFiles;
+        if (!f1 || !f2 || !f3) {
+          showStatus('loginStatus', 'error', 'Pilih 3 file foto kunci 2FA Anda untuk verifikasi ZKP.');
+          btn.disabled = false;
+          spinner.style.display = 'none';
           return;
         }
-        authUser = data.user;
+
+        btnText.textContent = '1/3 Meminta Challenge...';
+        showStatus('loginStatus', 'info', '1/3 Memverifikasi password & meminta token sesi 2FA...');
+
+        let sessionNonce;
+        if (backend) {
+          const chalRes = await fetch('/api/auth/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          const chalData = await chalRes.json();
+          if (!chalRes.ok) {
+            showStatus('loginStatus', 'error', chalData.error || 'Password salah atau akun tidak ditemukan.');
+            return;
+          }
+          sessionNonce = chalData.sessionNonce;
+        } else {
+          const localChal = await localMockDB.challenge(username, password);
+          sessionNonce = localChal.sessionNonce;
+        }
+
+        btnText.textContent = '2/3 Membuat Bukti ZK...';
+        showStatus('loginStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
+
+        const [h1, h2, h3] = await Promise.all([
+          hashFileDeterministic(f1),
+          hashFileDeterministic(f2),
+          hashFileDeterministic(f3)
+        ]);
+
+        const saltObj = await deriveSaltFromUsername(username);
+
+        const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
+          h1.fieldElement,
+          h2.fieldElement,
+          h3.fieldElement,
+          saltObj.fieldElement
+        );
+
+        const zkpResult = await generateZkProof({
+          h1: h1.fieldElement,
+          h2: h2.fieldElement,
+          h3: h3.fieldElement,
+          salt: saltObj.fieldElement,
+          rootCommitment: localRootCommitment,
+          sessionNonce: sessionNonce
+        });
+
+        if (!zkpResult.success) {
+          showStatus('loginStatus', 'error', '❌ Sirkuit ZKP Menolak: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini!');
+          return;
+        }
+
+        btnText.textContent = '3/3 Memverifikasi Bukti...';
+        showStatus('loginStatus', 'info', '3/3 Mengirim bukti kriptografis ke server untuk validasi pairing Groth16...');
+
+        let authResult;
+        if (backend) {
+          const verifyRes = await fetch('/api/auth/verify-2fa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username,
+              sessionNonce,
+              sessionAuthToken: zkpResult.sessionAuthToken,
+              proof: zkpResult.proof
+            })
+          });
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok) {
+            showStatus('loginStatus', 'error', verifyData.error || 'Bukti ZK 3 Foto ditolak oleh server.');
+            return;
+          }
+          authResult = verifyData;
+        } else {
+          authResult = await localMockDB.verify2fa(
+            username,
+            sessionNonce,
+            zkpResult.sessionAuthToken,
+            zkpResult.proof
+          );
+        }
+
+        const totalDuration = Math.round(performance.now() - startTime);
+
+        authCard.style.display = 'none';
+        successCard.style.display = 'block';
+
+        document.getElementById('loggedInUser').textContent = `@${username}`;
+        document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
+
+        const receiptPre = document.getElementById('loginProofReceipt');
+        if (receiptPre) {
+          receiptPre.textContent = JSON.stringify({
+            status: 'AUTHENTICATED_2FA',
+            authFactor: 'Multi-Factor (Faktor 1: Password Master + Faktor 2: 3-Image Keyfile ZKP)',
+            zkpVerification: 'VERIFIED_VALID (Groth16 Pairing Cocok)',
+            verificationDurationMs: authResult.verificationDurationMs || '< 5 ms',
+            sessionAuthToken: zkpResult.sessionAuthToken,
+            authenticatedAt: new Date().toISOString()
+          }, null, 2);
+        }
+
       } else {
-        const localRes = await localMockDB.login(username, password);
-        authUser = localRes.user;
-      }
+        // --- JALUR LOGIN STANDAR CEPAT (FAKTOR 1 PASSWORD) ---
+        btnText.textContent = 'Memverifikasi...';
+        let authUser;
 
-      const totalDuration = Math.round(performance.now() - startTime);
+        if (backend) {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
 
-      authCard.style.display = 'none';
-      successCard.style.display = 'block';
+          const data = await res.json();
+          if (!res.ok) {
+            showStatus('loginStatus', 'error', data.error || 'Username atau password salah.');
+            return;
+          }
+          authUser = data.user;
+        } else {
+          const localRes = await localMockDB.login(username, password);
+          authUser = localRes.user;
+        }
 
-      document.getElementById('loggedInUser').textContent = `@${username}`;
-      document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
+        const totalDuration = Math.round(performance.now() - startTime);
 
-      const receiptPre = document.getElementById('loginProofReceipt');
-      if (receiptPre) {
-        receiptPre.textContent = JSON.stringify({
-          status: 'AUTHENTICATED',
-          authFactor: 'Factor 1 (Master Passphrase)',
-          twoFactorStatus: 'Active (3-Image Keyfile Commitment on Server)',
-          recoveryCapability: 'Zero-Knowledge Self-Sovereign Recovery Enabled',
-          authenticatedAt: authUser.authenticatedAt || new Date().toISOString()
-        }, null, 2);
+        authCard.style.display = 'none';
+        successCard.style.display = 'block';
+
+        document.getElementById('loggedInUser').textContent = `@${username}`;
+        document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
+
+        const receiptPre = document.getElementById('loginProofReceipt');
+        if (receiptPre) {
+          receiptPre.textContent = JSON.stringify({
+            status: 'AUTHENTICATED',
+            authFactor: 'Factor 1 (Master Passphrase)',
+            twoFactorStatus: 'Active (3-Image Keyfile Commitment on Server)',
+            recoveryCapability: 'Zero-Knowledge Self-Sovereign Recovery Enabled',
+            authenticatedAt: authUser?.authenticatedAt || new Date().toISOString()
+          }, null, 2);
+        }
       }
 
     } catch (err) {
@@ -535,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showStatus('recoverStatus', 'info', '1/3 Meminta token sesi pemulihan untuk @' + username + '...');
 
       const backend = await hasBackend();
-      let sessionNonce, rootCommitment, salt2fa;
+      let sessionNonce;
 
       if (backend) {
         const chalRes = await fetch('/api/auth/recover-challenge', {
@@ -551,13 +725,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         sessionNonce = chalData.sessionNonce;
-        rootCommitment = chalData.rootCommitment;
-        salt2fa = chalData.salt2fa;
       } else {
         const chalData = await localMockDB.recoverChallenge(username);
         sessionNonce = chalData.sessionNonce;
-        rootCommitment = chalData.rootCommitment;
-        salt2fa = chalData.salt2fa;
       }
 
       btnText.textContent = 'Membuat Bukti ZK...';
@@ -569,12 +739,22 @@ document.addEventListener('DOMContentLoaded', () => {
         hashFileDeterministic(f3)
       ]);
 
+      // Salt deterministik per username - server tidak perlu membocorkan salt atau commitment
+      const saltObj = await deriveSaltFromUsername(username);
+
+      const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
+        h1.fieldElement,
+        h2.fieldElement,
+        h3.fieldElement,
+        saltObj.fieldElement
+      );
+
       const zkpResult = await generateZkProof({
         h1: h1.fieldElement,
         h2: h2.fieldElement,
         h3: h3.fieldElement,
-        salt: salt2fa || '0',
-        rootCommitment: rootCommitment,
+        salt: saltObj.fieldElement,
+        rootCommitment: localRootCommitment,
         sessionNonce: sessionNonce
       });
 
