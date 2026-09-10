@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { SNARK_SCALAR_FIELD } from '../server/src/nonceManager.js';
 import { getPoseidon, computeHierarchicalCommitment, computeSessionAuthToken } from '../client/src/crypto/poseidon.js';
 import { deriveSaltFromPassphrase, generateAutoSalt, deriveSaltFromUsername, createBackupPayload } from '../client/src/crypto/saltManager.js';
+import { sortImageFieldElements, hasDuplicateHashes } from '../client/src/crypto/fileHash.js';
 
 test('1. Determinisme Reduksi SHA-256 ke BN254 Scalar Field', async () => {
   const sampleData = Buffer.from('RAW_PIXEL_DATA_RGB_ENTROPY_SAMPLE_1');
@@ -78,4 +79,29 @@ test('5. Validasi Struktur Sertifikat Kunci Cadangan (createBackupPayload)', () 
   assert.equal(payload.salt, '1234567890');
   assert.equal(payload.rootCommitment, '9876543210');
   assert.ok(payload.notice, 'Notice harus ada');
+});
+
+test('6. Penyortiran Deterministik Hash Foto (Order-Independent Keyfile)', () => {
+  const hA = '12345678901234567890';
+  const hB = '99999999999999999999';
+  const hC = '55555555555555555555';
+
+  const perm1 = sortImageFieldElements([hA, hB, hC]);
+  const perm2 = sortImageFieldElements([hC, hA, hB]);
+  const perm3 = sortImageFieldElements([hB, hC, hA]);
+
+  assert.deepEqual(perm1, perm2, 'Permutasi 1 dan 2 harus menghasilkan urutan yang identik');
+  assert.deepEqual(perm2, perm3, 'Permutasi 2 dan 3 harus menghasilkan urutan yang identik');
+  assert.equal(perm1[0], hA);
+  assert.equal(perm1[1], hC);
+  assert.equal(perm1[2], hB);
+});
+
+test('7. Deteksi Foto Kunci Duplikat (Anti-Trivial Collision)', () => {
+  const h1 = '1234567890';
+  const h2 = '9876543210';
+  const h3 = '1234567890';
+
+  assert.equal(hasDuplicateHashes([h1, h2, h3]), true, 'Harus mendeteksi duplikat foto');
+  assert.equal(hasDuplicateHashes([h1, h2, '555555']), false, 'Tidak boleh mendeteksi duplikat jika semua foto unik');
 });

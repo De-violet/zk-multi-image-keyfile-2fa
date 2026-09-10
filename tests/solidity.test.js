@@ -80,5 +80,11 @@ test('Solidity Smart Contract Tooling & Bytecode Verification', async (t) => {
 
     const verifyFunc = vaultContract.abi.find(item => item.name === 'verify2FA');
     assert.ok(verifyFunc, 'Fungsi verify2FA harus ada di dalam ABI vault');
+
+    const ttlGetter = vaultContract.abi.find(item => item.name === 'NONCE_TTL');
+    assert.ok(ttlGetter, 'Konstanta NONCE_TTL harus ada di dalam ABI vault');
+
+    const timestampGetter = vaultContract.abi.find(item => item.name === 'userNonceTimestamps');
+    assert.ok(timestampGetter, 'Mapping userNonceTimestamps harus ada di dalam ABI vault');
   });
 });

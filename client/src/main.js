@@ -1,4 +1,4 @@
-import { hashFileDeterministic } from './crypto/fileHash.js';
+import { hashFileDeterministic, sortImageFieldElements, hasDuplicateHashes } from './crypto/fileHash.js';
 import { generateAutoSalt, deriveSaltFromUsername, downloadBackupKey } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof, verifyZkProof } from './crypto/zkProver.js';
@@ -24,6 +24,22 @@ const state = {
 // CLIENT-SIDE SERVERLESS ADAPTER (UNTUK GITHUB PAGES DEMO)
 // ========================================================
 let backendAvailable = null;
+
+function updateConnectionBadge(online) {
+  const dot = document.getElementById('connectionDot');
+  const text = document.getElementById('connectionText');
+  if (!dot || !text) return;
+  if (online) {
+    dot.style.background = '#22c55e';
+    text.style.color = '#ffffff';
+    text.textContent = '🟢 Server Online (Express REST API)';
+  } else {
+    dot.style.background = '#eab308';
+    text.style.color = '#a1a1aa';
+    text.textContent = '🟡 Mode Mandiri (WASM Client / GitHub Pages)';
+  }
+}
+
 async function hasBackend() {
   if (backendAvailable !== null) return backendAvailable;
   try {
@@ -35,6 +51,7 @@ async function hasBackend() {
   } catch (e) {
     backendAvailable = false;
   }
+  updateConnectionBadge(backendAvailable);
   return backendAvailable;
 }
 
@@ -191,49 +208,72 @@ function hideStatus(elementId) {
   if (box) box.style.display = 'none';
 }
 
-// Setup slot upload file
+// Helper untuk mengolah pemilihan file slot
+function handleSlotFile(mode, index, file) {
+  if (!file) return;
+  const slot = document.getElementById(`${mode}Slot${index + 1}`);
+  const preview = document.getElementById(`${mode}Preview${index + 1}`);
+
+  if (mode === 'reg') {
+    state.regFiles[index] = file;
+  } else if (mode === 'login') {
+    state.loginFiles[index] = file;
+  } else if (mode === 'recover') {
+    state.recoverFiles[index] = file;
+  } else if (mode === 'lab') {
+    state.labFiles[index] = file;
+    updateLabFileDetails();
+    resetLabPipeline();
+  }
+
+  if (slot) slot.classList.add('filled');
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    if (!preview) return;
+    preview.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = evt.target.result;
+    img.className = 'slot-img-preview';
+    img.alt = file.name;
+
+    const span = document.createElement('span');
+    span.style.cssText = 'position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+    span.textContent = file.name;
+
+    preview.appendChild(img);
+    preview.appendChild(span);
+  };
+  reader.readAsDataURL(file);
+}
+
+// Setup slot upload file dengan dukungan Drag & Drop
 function setupSlot(mode, index) {
   const slot = document.getElementById(`${mode}Slot${index + 1}`);
   const input = document.getElementById(`${mode}File${index + 1}`);
-  const preview = document.getElementById(`${mode}Preview${index + 1}`);
 
   if (!slot || !input) return;
 
   slot.addEventListener('click', () => input.click());
 
+  // Dukungan Drag & Drop
+  slot.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    slot.style.borderColor = '#ffffff';
+  });
+  slot.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    slot.style.borderColor = '';
+  });
+  slot.addEventListener('drop', (e) => {
+    e.preventDefault();
+    slot.style.borderColor = '';
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleSlotFile(mode, index, file);
+  });
+
   input.addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
-    if (!file) return;
-
-    if (mode === 'reg') {
-      state.regFiles[index] = file;
-    } else if (mode === 'login') {
-      state.loginFiles[index] = file;
-    } else if (mode === 'recover') {
-      state.recoverFiles[index] = file;
-    } else if (mode === 'lab') {
-      state.labFiles[index] = file;
-      updateLabFileDetails();
-      resetLabPipeline();
-    }
-
-    slot.classList.add('filled');
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      preview.innerHTML = '';
-      const img = document.createElement('img');
-      img.src = evt.target.result;
-      img.className = 'slot-img-preview';
-      img.alt = file.name;
-
-      const span = document.createElement('span');
-      span.style.cssText = 'position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-      span.textContent = file.name;
-
-      preview.appendChild(img);
-      preview.appendChild(span);
-    };
-    reader.readAsDataURL(file);
+    if (file) handleSlotFile(mode, index, file);
   });
 }
 
@@ -307,6 +347,9 @@ function resetLabPipeline() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Cek koneksi backend untuk memperbarui indikator status
+  hasBackend();
+
   // Pasang slot file untuk semua mode
   [0, 1, 2].forEach(i => {
     setupSlot('reg', i);
@@ -442,19 +485,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       showStatus('regStatus', 'info', 'Menghitung reduksi hash 3 foto secara lokal di browser...');
-      const [h1, h2, h3] = await Promise.all([
+      const [rawH1, rawH2, rawH3] = await Promise.all([
         hashFileDeterministic(f1),
         hashFileDeterministic(f2),
         hashFileDeterministic(f3)
       ]);
 
+      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
+      if (hasDuplicateHashes(rawHashes)) {
+        showStatus('regStatus', 'error', 'Ketiga foto harus berbeda! Menggunakan foto yang sama mengurangi entropi keamanan.');
+        return;
+      }
+
+      // Penyortiran deterministik (Order-Independent Keyfile)
+      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
+
       // Salt deterministik unik per username (tertanam aman di dalam commitment)
       const saltObj = await deriveSaltFromUsername(username);
 
       const { rootCommitment } = await computeHierarchicalCommitment(
-        h1.fieldElement,
-        h2.fieldElement,
-        h3.fieldElement,
+        h1,
+        h2,
+        h3,
         saltObj.fieldElement
       );
 
@@ -571,25 +623,36 @@ document.addEventListener('DOMContentLoaded', () => {
         btnText.textContent = '2/3 Membuat Bukti ZK...';
         showStatus('loginStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
 
-        const [h1, h2, h3] = await Promise.all([
+        const [rawH1, rawH2, rawH3] = await Promise.all([
           hashFileDeterministic(f1),
           hashFileDeterministic(f2),
           hashFileDeterministic(f3)
         ]);
 
+        const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
+        if (hasDuplicateHashes(rawHashes)) {
+          showStatus('loginStatus', 'error', 'Ketiga foto kunci harus berbeda!');
+          btn.disabled = false;
+          spinner.style.display = 'none';
+          return;
+        }
+
+        // Penyortiran deterministik (Order-Independent Keyfile)
+        const [h1, h2, h3] = sortImageFieldElements(rawHashes);
+
         const saltObj = await deriveSaltFromUsername(username);
 
         const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
-          h1.fieldElement,
-          h2.fieldElement,
-          h3.fieldElement,
+          h1,
+          h2,
+          h3,
           saltObj.fieldElement
         );
 
         const zkpResult = await generateZkProof({
-          h1: h1.fieldElement,
-          h2: h2.fieldElement,
-          h3: h3.fieldElement,
+          h1: h1,
+          h2: h2,
+          h3: h3,
           salt: saltObj.fieldElement,
           rootCommitment: localRootCommitment,
           sessionNonce: sessionNonce
@@ -632,6 +695,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const totalDuration = Math.round(performance.now() - startTime);
 
+        // Simpan sesi ke sessionStorage
+        const token2fa = authResult?.sessionToken || 'mock_2fa_session_token';
+        sessionStorage.setItem('zk2fa_session_token', token2fa);
+        sessionStorage.setItem('zk2fa_session_user', username);
+
         authCard.style.display = 'none';
         successCard.style.display = 'block';
 
@@ -654,6 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- JALUR LOGIN STANDAR CEPAT (FAKTOR 1 PASSWORD) ---
         btnText.textContent = 'Memverifikasi...';
         let authUser;
+        let stdToken = 'mock_session_token';
 
         if (backend) {
           const res = await fetch('/api/auth/login', {
@@ -668,10 +737,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
           }
           authUser = data.user;
+          stdToken = data.sessionToken;
         } else {
           const localRes = await localMockDB.login(username, password);
           authUser = localRes.user;
         }
+
+        // Simpan sesi ke sessionStorage
+        sessionStorage.setItem('zk2fa_session_token', stdToken);
+        sessionStorage.setItem('zk2fa_session_user', username);
 
         const totalDuration = Math.round(performance.now() - startTime);
 
@@ -759,26 +833,37 @@ document.addEventListener('DOMContentLoaded', () => {
       btnText.textContent = 'Membuat Bukti ZK...';
       showStatus('recoverStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
 
-      const [h1, h2, h3] = await Promise.all([
+      const [rawH1, rawH2, rawH3] = await Promise.all([
         hashFileDeterministic(f1),
         hashFileDeterministic(f2),
         hashFileDeterministic(f3)
       ]);
 
+      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
+      if (hasDuplicateHashes(rawHashes)) {
+        showStatus('recoverStatus', 'error', 'Ketiga foto kunci harus berbeda!');
+        btn.disabled = false;
+        spinner.style.display = 'none';
+        return;
+      }
+
+      // Penyortiran deterministik (Order-Independent Keyfile)
+      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
+
       // Salt deterministik per username - server tidak perlu membocorkan salt atau commitment
       const saltObj = await deriveSaltFromUsername(username);
 
       const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
-        h1.fieldElement,
-        h2.fieldElement,
-        h3.fieldElement,
+        h1,
+        h2,
+        h3,
         saltObj.fieldElement
       );
 
       const zkpResult = await generateZkProof({
-        h1: h1.fieldElement,
-        h2: h2.fieldElement,
-        h3: h3.fieldElement,
+        h1: h1,
+        h2: h2,
+        h3: h3,
         salt: saltObj.fieldElement,
         rootCommitment: localRootCommitment,
         sessionNonce: sessionNonce
@@ -838,10 +923,56 @@ document.addEventListener('DOMContentLoaded', () => {
     showVerifierTab();
   });
 
-  // Logout
-  document.getElementById('btnLogout').addEventListener('click', () => {
+  // Uji Akses Data Vault Terproteksi (Bearer Session Token)
+  const btnTestVault = document.getElementById('btnTestVaultAccess');
+  const vaultRespBox = document.getElementById('vaultResponseBox');
+  if (btnTestVault && vaultRespBox) {
+    btnTestVault.addEventListener('click', async () => {
+      vaultRespBox.style.display = 'block';
+      vaultRespBox.textContent = 'Menghubungi endpoint /api/user/vault...';
+      const token = sessionStorage.getItem('zk2fa_session_token');
+      const backend = await hasBackend();
+
+      if (backend && token) {
+        try {
+          const res = await fetch('/api/user/vault', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const data = await res.json();
+          vaultRespBox.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          vaultRespBox.textContent = 'Error koneksi: ' + e.message;
+        }
+      } else {
+        vaultRespBox.textContent = JSON.stringify({
+          mode: backend ? 'Missing Session Token' : 'Mode Mandiri (WASM Client / GitHub Pages)',
+          status: 'SECURE_VAULT_ACCESSIBLE (SIMULASI)',
+          user: sessionStorage.getItem('zk2fa_session_user') || 'Demo User',
+          notice: 'Bearer session token terverifikasi secara lokal di browser.'
+        }, null, 2);
+      }
+    });
+  }
+
+  // Logout Sesi
+  document.getElementById('btnLogout').addEventListener('click', async () => {
     successCard.style.display = 'none';
     authCard.style.display = 'block';
+
+    const token = sessionStorage.getItem('zk2fa_session_token');
+    if (token) {
+      const backend = await hasBackend();
+      if (backend) {
+        fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => {});
+      }
+    }
+
+    sessionStorage.removeItem('zk2fa_session_token');
+    sessionStorage.removeItem('zk2fa_session_user');
+    if (vaultRespBox) vaultRespBox.style.display = 'none';
 
     document.getElementById('loginPassword').value = '';
     resetSlots('login');
@@ -879,16 +1010,27 @@ document.addEventListener('DOMContentLoaded', () => {
     labWitnessOutput.innerHTML = '<span style="color:#e4e4e7;">Membaca byte foto & menghitung reduksi SHA-256 modulo BN254...</span>';
 
     try {
-      const [h1, h2, h3] = await Promise.all([
+      const [rawH1, rawH2, rawH3] = await Promise.all([
         hashFileDeterministic(f1),
         hashFileDeterministic(f2),
         hashFileDeterministic(f3)
       ]);
 
+      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
+      if (hasDuplicateHashes(rawHashes)) {
+        alert('Ketiga foto harus berbeda!');
+        btnLabGenWitness.disabled = false;
+        btnLabGenWitness.textContent = 'Hitung Witness dari Foto';
+        return;
+      }
+
+      // Penyortiran deterministik
+      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
+
       const commitmentResult = await computeHierarchicalCommitment(
-        h1.fieldElement,
-        h2.fieldElement,
-        h3.fieldElement,
+        h1,
+        h2,
+        h3,
         state.labSalt.fieldElement
       );
       state.labRootCommitment = commitmentResult.rootCommitment;
@@ -899,9 +1041,9 @@ document.addEventListener('DOMContentLoaded', () => {
       state.labNonce = (BigInt('0x' + randHex) % BN254_R).toString();
 
       state.labWitnessInputs = {
-        h1: h1.fieldElement,
-        h2: h2.fieldElement,
-        h3: h3.fieldElement,
+        h1: h1,
+        h2: h2,
+        h3: h3,
         salt: state.labSalt.fieldElement,
         rootCommitment: state.labRootCommitment,
         sessionNonce: state.labNonce

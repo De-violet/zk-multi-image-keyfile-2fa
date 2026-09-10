@@ -27,11 +27,17 @@ contract MultiImage2FAVault {
     // Mapping user address => current session nonce
     mapping(address => uint256) public userNonces;
 
+    // Mapping user address => timestamp saat nonce diterbitkan
+    mapping(address => uint256) public userNonceTimestamps;
+
+    // Masa berlaku nonce on-chain (5 menit)
+    uint256 public constant NONCE_TTL = 300;
+
     // Mapping nonce hash => status hangus (single-use anti-replay)
     mapping(bytes32 => bool) public burnedNonces;
 
     event CommitmentRegistered(address indexed user, uint256 commitment);
-    event NonceIssued(address indexed user, uint256 nonce);
+    event NonceIssued(address indexed user, uint256 nonce, uint256 expiresAt);
     event TwoFactorVerified(address indexed user, uint256 sessionAuthToken, uint256 nonce);
 
     constructor(address _verifierAddress) {
@@ -55,7 +61,8 @@ contract MultiImage2FAVault {
         // Reduksi modulo BN254 scalar field
         newNonce = newNonce % 21888242871839275222246405745257275088548364400416034343698204186575808495617;
         userNonces[msg.sender] = newNonce;
-        emit NonceIssued(msg.sender, newNonce);
+        userNonceTimestamps[msg.sender] = block.timestamp;
+        emit NonceIssued(msg.sender, newNonce, block.timestamp + NONCE_TTL);
         return newNonce;
     }
 
@@ -78,12 +85,16 @@ contract MultiImage2FAVault {
         uint256 currentNonce = userNonces[msg.sender];
         require(currentNonce != 0, "No active challenge nonce");
 
+        // Cek kedaluwarsa nonce
+        require(block.timestamp <= userNonceTimestamps[msg.sender] + NONCE_TTL, "Challenge nonce expired (> 5 minutes)");
+
         bytes32 nonceKey = keccak256(abi.encodePacked(msg.sender, currentNonce));
         require(!burnedNonces[nonceKey], "Nonce already burned (anti-replay)");
 
         // Tandai nonce sebagai hangus seketika
         burnedNonces[nonceKey] = true;
         userNonces[msg.sender] = 0;
+        userNonceTimestamps[msg.sender] = 0;
 
         // Susun sinyal publik sesuai urutan sirkuit Circom:
         // [sessionAuthToken, rootCommitment, sessionNonce]

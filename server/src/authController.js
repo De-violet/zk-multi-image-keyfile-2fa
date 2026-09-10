@@ -1,7 +1,36 @@
 import crypto from 'crypto';
 import { db } from './db.js';
-import { nonceManager } from './nonceManager.js';
+import { nonceManager, SNARK_SCALAR_FIELD } from './nonceManager.js';
 import { verifyZkProof } from './zkVerifier.js';
+import { sessionManager } from './sessionManager.js';
+
+// Helper validasi input
+function validateUsername(username) {
+  if (!username || typeof username !== 'string') return 'Username harus berupa teks.';
+  const trimmed = username.trim();
+  if (trimmed.length < 3 || trimmed.length > 32) return 'Panjang username harus antara 3 hingga 32 karakter.';
+  if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) return 'Username hanya boleh mengandung huruf, angka, tanda hubung (-), dan garis bawah (_).';
+  return null;
+}
+
+function validatePassword(password) {
+  if (!password || typeof password !== 'string') return 'Password harus berupa teks.';
+  if (password.length < 6) return 'Password minimal 6 karakter.';
+  return null;
+}
+
+function validateBN254Field(val, fieldName = 'Nilai') {
+  if (!val) return `${fieldName} tidak boleh kosong.`;
+  try {
+    const bn = BigInt(val.toString());
+    if (bn < 0n || bn >= SNARK_SCALAR_FIELD) {
+      return `${fieldName} harus berada dalam rentang elemen medan skalar BN254.`;
+    }
+  } catch (e) {
+    return `${fieldName} bukan format numerik BN254 yang valid.`;
+  }
+  return null;
+}
 
 // Helper untuk hashing password F1 di server dengan salt acak per pengguna (PBKDF2)
 function hashPassword(password, salt) {
@@ -9,6 +38,26 @@ function hashPassword(password, salt) {
     return crypto.createHash('sha256').update(password).digest('hex');
   }
   return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
+}
+
+/**
+ * Middleware untuk memvalidasi Bearer Session Token
+ */
+export function requireAuth(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Akses ditolak: Diperlukan header Authorization dengan format Bearer <token>.' });
+  }
+
+  const token = authHeader.slice(7).trim();
+  const sessionStatus = sessionManager.validateSession(token);
+  if (!sessionStatus.valid) {
+    return res.status(401).json({ error: 'Akses ditolak: ' + sessionStatus.reason });
+  }
+
+  req.user = sessionStatus;
+  req.sessionToken = token;
+  next();
 }
 
 export const authController = {
@@ -27,6 +76,16 @@ export const authController = {
           error: 'Parameter tidak lengkap. Diperlukan: username, password, rootCommitment.'
         });
       }
+
+      // Validasi format username, password, dan field element BN254
+      const userErr = validateUsername(username);
+      if (userErr) return res.status(400).json({ error: userErr });
+
+      const passErr = validatePassword(password);
+      if (passErr) return res.status(400).json({ error: passErr });
+
+      const commErr = validateBN254Field(rootCommitment, 'rootCommitment');
+      if (commErr) return res.status(400).json({ error: commErr });
 
       // Cegah Account Takeover: Tolak jika username sudah terdaftar
       const isDemoMode = process.env.DEMO_MODE === 'true' || process.env.ALLOW_DEMO_OVERWRITE === 'true';
@@ -84,11 +143,12 @@ export const authController = {
         return res.status(401).json({ error: 'Password salah. Gunakan opsi "Lupa Password" jika Anda lupa.' });
       }
 
-      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const { token: sessionToken, expiresIn } = sessionManager.createSession(user.username);
       return res.json({
         success: true,
         message: 'Login berhasil!',
         sessionToken,
+        expiresIn,
         user: {
           username: user.username,
           authenticatedAt: new Date().toISOString()
@@ -182,13 +242,14 @@ export const authController = {
       }
 
       // 3. Bukti valid -> terbitkan session token
-      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const { token: sessionToken, expiresIn } = sessionManager.createSession(user.username);
 
       return res.json({
         success: true,
         message: 'Otentikasi 2FA Berhasil! Akses Vault diberikan.',
         verificationDurationMs: zkResult.durationMs,
         sessionToken,
+        expiresIn,
         user: {
           username: user.username,
           authenticatedAt: new Date().toISOString()
@@ -243,6 +304,9 @@ export const authController = {
           error: 'Parameter tidak lengkap. Diperlukan: username, sessionNonce, sessionAuthToken, proof, newPassword.'
         });
       }
+
+      const passErr = validatePassword(newPassword);
+      if (passErr) return res.status(400).json({ error: passErr });
 
       const user = db.getUser(username);
       if (!user) {
@@ -308,6 +372,38 @@ export const authController = {
       exists: true,
       username: user.username,
       createdAt: user.createdAt
+    });
+  },
+
+  /**
+   * Protected Endpoint: Akses Vault Pengguna Terotentikasi
+   */
+  async getVaultData(req, res) {
+    return res.json({
+      success: true,
+      message: 'Akses Vault berhasil diberikan.',
+      user: {
+        username: req.user.username,
+        sessionCreatedAt: req.user.createdAt
+      },
+      vault: {
+        status: 'SECURE_VAULT_UNLOCKED',
+        authenticatedVia: 'Zero-Knowledge Multi-Image Keyfile 2FA',
+        unlockedAt: new Date().toISOString()
+      }
+    });
+  },
+
+  /**
+   * Logout Sesi: Hanguskan session token aktif
+   */
+  async logout(req, res) {
+    if (req.sessionToken) {
+      sessionManager.destroySession(req.sessionToken);
+    }
+    return res.json({
+      success: true,
+      message: 'Logout berhasil. Sesi telah dihanguskan dari server.'
     });
   }
 };

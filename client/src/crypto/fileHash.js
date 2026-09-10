@@ -62,3 +62,24 @@ function computeShannonEntropy(bytes) {
   }
   return parseFloat(entropy.toFixed(3));
 }
+
+/**
+ * Menyortir elemen medan gambar secara deterministik (Order-Independent Keyfile)
+ * Memastikan urutan pemilihan foto tidak menggagalkan ZKP
+ * @param {string[]} hashes
+ * @returns {string[]}
+ */
+export function sortImageFieldElements(hashes) {
+  return [...hashes].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1));
+}
+
+/**
+ * Memeriksa apakah terdapat hash gambar yang duplikat
+ * Mencegah penurunan entropi kunci foto
+ * @param {string[]} hashes
+ * @returns {boolean}
+ */
+export function hasDuplicateHashes(hashes) {
+  const set = new Set(hashes);
+  return set.size !== hashes.length;
+}

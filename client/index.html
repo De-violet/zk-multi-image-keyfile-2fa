@@ -144,6 +144,12 @@
       </div>
       <h1>Zero-Knowledge 2FA</h1>
       <p class="subtitle">Alur Kriptografis: 1. Daftar Akun &rarr; 2. Login Akun &rarr; 3. Verifier</p>
+      
+      <!-- Indikator Status Koneksi Backend -->
+      <div id="connectionBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.73rem; padding: 4px 12px; border-radius: 12px; background: #18181b; border: 1px solid #27272a; margin-top: 8px;">
+        <span id="connectionDot" style="width: 8px; height: 8px; border-radius: 50%; background: #71717a;"></span>
+        <span id="connectionText" style="color: #a1a1aa;">Mengecek koneksi backend...</span>
+      </div>
     </header>
 
     <!-- Kartu Utama -->
@@ -462,6 +468,14 @@
           <pre id="loginProofReceipt" class="receipt-pre"></pre>
         </div>
       </details>
+
+      <!-- Vault Protected Route Demo -->
+      <div style="margin-top: 12px; text-align: left;">
+        <button type="button" id="btnTestVaultAccess" class="btn-secondary" style="width: 100%; font-size: 0.82rem; padding: 8px 12px;">
+          🔓 Uji Otorisasi Vault (/api/user/vault via Bearer Token)
+        </button>
+        <div id="vaultResponseBox" style="display: none; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.73rem; color: #a1a1aa; white-space: pre-wrap;"></div>
+      </div>
 
       <div style="display: flex; gap: 10px; margin-top: 16px; draft-mode">
         <button id="btnGoToVerifier" class="btn-primary" style="flex: 1; font-size: 0.85rem;">3. Lanjut ke Verifier &rarr;</button>

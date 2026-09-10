@@ -288,7 +288,7 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     });
     assert.equal(oldLoginRes.status, 401, 'Password lama harus ditolak');
 
-    // 2. Password baru harus berhasil
+    // 2. Password baru harus berhasil dan menerbitkan Bearer sessionToken aktif
     const newLoginRes = await fetch(`${baseUrl}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -297,6 +297,77 @@ test('End-to-End Authentication & Attack Resistance Lifecycle', async (t) => {
     assert.equal(newLoginRes.status, 200, 'Login dengan password baru harus berhasil');
     const newLoginData = await newLoginRes.json();
     assert.equal(newLoginData.success, true);
+    assert.ok(newLoginData.sessionToken, 'Login harus menyertakan sessionToken');
+
+    // 3. Akses endpoint terproteksi /api/user/vault tanpa token (harus 401)
+    const unauthorizedRes = await fetch(`${baseUrl}/api/user/vault`);
+    assert.equal(unauthorizedRes.status, 401, 'Akses vault tanpa token harus ditolak (401)');
+
+    // 4. Akses endpoint terproteksi /api/user/vault dengan Bearer token yang sah (harus 200)
+    const authorizedRes = await fetch(`${baseUrl}/api/user/vault`, {
+      headers: { 'Authorization': `Bearer ${newLoginData.sessionToken}` }
+    });
+    assert.equal(authorizedRes.status, 200, 'Akses vault dengan Bearer token sah harus diizinkan (200)');
+    const vaultData = await authorizedRes.json();
+    assert.equal(vaultData.success, true);
+    assert.equal(vaultData.user.username, username.toLowerCase());
+
+    // 5. Logout dan pembatalan sesi
+    const logoutRes = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${newLoginData.sessionToken}` }
+    });
+    assert.equal(logoutRes.status, 200, 'Logout harus berhasil');
+
+    // 6. Akses vault setelah logout (harus 401 karena sesi dihanguskan)
+    const postLogoutRes = await fetch(`${baseUrl}/api/user/vault`, {
+      headers: { 'Authorization': `Bearer ${newLoginData.sessionToken}` }
+    });
+    assert.equal(postLogoutRes.status, 401, 'Akses vault pasca-logout harus ditolak');
+  });
+
+  await t.test('Keamanan: Validasi Input Skema (Username, Password & BN254 Field Element)', async () => {
+    // 1. Username terlalu pendek (< 3 char)
+    const shortUserRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'ab', password: 'ValidPassword123!', rootCommitment: '123456789' })
+    });
+    assert.equal(shortUserRes.status, 400);
+    const shortUserData = await shortUserRes.json();
+    assert.match(shortUserData.error, /Panjang username/);
+
+    // 2. Username mengandung karakter ilegal
+    const illegalUserRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'bad user!@#', password: 'ValidPassword123!', rootCommitment: '123456789' })
+    });
+    assert.equal(illegalUserRes.status, 400);
+
+    // 3. Password terlalu pendek (< 6 char)
+    const weakPassRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'valid_user_02', password: '123', rootCommitment: '123456789' })
+    });
+    assert.equal(weakPassRes.status, 400);
+    const weakPassData = await weakPassRes.json();
+    assert.match(weakPassData.error, /Password minimal/);
+
+    // 4. Root commitment di luar medan skalar BN254
+    const overflowFieldRes = await fetch(`${baseUrl}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: 'valid_user_03',
+        password: 'ValidPassword123!',
+        rootCommitment: (SNARK_SCALAR_FIELD + 100n).toString()
+      })
+    });
+    assert.equal(overflowFieldRes.status, 400);
+    const overflowData = await overflowFieldRes.json();
+    assert.match(overflowData.error, /rentang elemen medan/);
   });
 
   await t.test('Keamanan: Rate Limiter Terintegrasi Menggagalkan Flooding (HTTP 429)', async () => {

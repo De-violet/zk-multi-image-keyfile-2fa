@@ -2,13 +2,16 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { authController } from './authController.js';
+import { authController, requireAuth } from './authController.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Percayai 1 hop reverse proxy (Nginx / Cloudflare / Docker) untuk akurasi IP rate limiting
+app.set('trust proxy', 1);
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -36,7 +39,7 @@ const recoveryLimiter = createRateLimiter({
   message: 'Terlalu banyak permintaan sesi pemulihan akun. Silakan tunggu 1 menit.'
 });
 
-// API Routes
+// API Routes (Publik)
 app.post('/api/auth/register', authLimiter, authController.register);
 app.post('/api/auth/login', authLimiter, authController.login);
 app.post('/api/auth/challenge', authLimiter, authController.challenge);
@@ -44,6 +47,10 @@ app.post('/api/auth/verify-2fa', authLimiter, authController.verify2fa);
 app.post('/api/auth/recover-challenge', recoveryLimiter, authController.recoverChallenge);
 app.post('/api/auth/recover-reset', recoveryLimiter, authController.recoverReset);
 app.get('/api/auth/user/:username', authLimiter, authController.getUserStatus);
+
+// API Routes (Terproteksi Bearer Session Token)
+app.get('/api/user/vault', requireAuth, authController.getVaultData);
+app.post('/api/auth/logout', requireAuth, authController.logout);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
