@@ -124,6 +124,26 @@ npm run compile:circuit
 
 ---
 
+## 🔒 Keamanan & Catatan Penting Trusted Setup (Toxic Waste Caveat)
+
+Sistem ini menggunakan skema pembuktian **Groth16 zk-SNARKs**, yang memerlukan dua fase **Trusted Setup**: Fase 1 (Universal Powers of Tau) dan Fase 2 (Circuit-Specific Setup).
+
+> [!WARNING]
+> **Bahaya Entropi Statis / Hardcoded:**  
+> Parameter rahasia sementara yang dihasilkan saat proses setup disebut sebagai ***toxic waste*** (trapdoor: $\alpha, \beta, \gamma, \delta, x$). Jika nilai entropi yang dimasukkan ke dalam setup di-hardcode dalam repositori publik, pihak luar dapat merekonstruksi trapdoor tersebut dan memalsukan bukti ZK valid untuk `rootCommitment` milik akun manapun tanpa pernah memiliki foto kuncinya.
+
+### Mitigasi yang Diterapkan di Proyek Ini:
+1. **Peniadaan Hardcode Entropi**: Flag plaintext `-e="..."` telah dihapus dari `circuits/scripts/compile.sh`.
+2. **Mode Interaktif Dinamis**: Saat dijalankan di terminal, `snarkjs` akan meminta input entropi keyboard acak rahasia langsung dari pengguna.
+3. **Fallback CSPRNG Non-Interaktif**: Pada lingkungan non-interaktif (seperti CI/CD), skrip mengambil entropi acak kriptografis langsung dari `/dev/urandom` sistem operasi dan segera menghapus variabelnya dari memori.
+4. **Dukungan PTAU Publik (Produksi)**: Skrip mendukung penggunaan file PTAU dari upacara publik universal (seperti upacara [Hermez Network / PSE Perpetual Powers of Tau](https://github.com/iden3/snarkjs#7-prepare-phase-2)) melalui parameter `PUBLIC_PTAU_PATH`:
+   ```bash
+   PUBLIC_PTAU_PATH=./powersOfTau28_hez_final_12.ptau npm run compile:circuit
+   ```
+   *Pada lingkungan produksi, gunakan file PTAU publik terverifikasi dan jalankan upacara MPC Fase 2 multi-partisipan untuk menjamin asumsi 1-of-N honest participant.*
+
+---
+
 ## 📖 Panduan Praktik Uji Coba (Demo Walkthrough)
 
 Setelah membuka aplikasi web di browser:

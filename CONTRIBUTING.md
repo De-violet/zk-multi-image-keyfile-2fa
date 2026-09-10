@@ -68,7 +68,8 @@ Berikut beberapa area yang sangat terbuka untuk eksplorasi dan pengembangan lebi
 ### 1. Sirkuit ZKP & Kriptografi (`circuits/`)
 - Mengurangi jumlah constraint R1CS pada template Poseidon.
 - Menambahkan fleksibilitas jumlah berkas kunci ($N$ gambar dinamis).
-- Eksplorasi skema pembuktian alternatif (misalnya PLONK atau Halo2).
+- Eksplorasi skema pembuktian alternatif tanpa trusted setup spesifik sirkuit (misalnya PLONK atau Halo2).
+- **Multi-Party Computation (MPC) Ceremony**: Kontribusi entropi acak independen untuk upacara setup Fase 2 sirkuit agar bebas dari risiko *toxic waste*.
 
 ### 2. Klien & Performa Browser (`client/`)
 - **Web Worker**: Memindahkan sintesis bukti `snarkjs.groth16.fullProve` ke Web Worker di latar belakang agar antarmuka tidak mengalami *freeze* saat komputasi berat.
