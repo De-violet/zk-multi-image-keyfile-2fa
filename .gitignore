@@ -7,4 +7,8 @@ yarn-error.log*
 .env
 .cache/
 dist/
+artifacts/
+cache_hardhat/
+out/
+circuits/build/*.ptau
 server/data/*.json
