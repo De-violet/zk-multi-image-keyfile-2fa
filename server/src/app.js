@@ -30,6 +30,7 @@ app.use('/zk', express.static(zkArtifactsPath));
 app.use('/zk', express.static(clientPublicZk));
 app.use('/vendor', express.static(clientVendor));
 app.use('/workers', express.static(clientWorkers));
+app.use('/sdk', express.static(path.join(__dirname, '../../sdk/dist/browser')));
 
 import { createRateLimiter } from './rateLimiter.js';
 

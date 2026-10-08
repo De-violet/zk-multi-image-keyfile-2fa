@@ -1,0 +1,28 @@
+{
+  "name": "zk-canvas-sdk",
+  "version": "1.0.0",
+  "description": "Zero-Knowledge Visual TOTP Client-Side SDK with Web Worker and Groth16 SnarkJS",
+  "type": "module",
+  "main": "dist/esm/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "unpkg": "dist/browser/zk-canvas-sdk.js",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./browser": "./dist/browser/zk-canvas-sdk.js"
+  },
+  "keywords": [
+    "zero-knowledge",
+    "zkp",
+    "groth16",
+    "snarkjs",
+    "visual-totp",
+    "sdk",
+    "web-worker"
+  ],
+  "author": "Antigravity",
+  "license": "MIT"
+}
