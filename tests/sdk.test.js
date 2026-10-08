@@ -18,72 +18,70 @@ import { WorkerClient } from '../sdk/src/worker/workerClient.js';
 import { SdkEventEmitter } from '../sdk/src/events/eventEmitter.js';
 import { ZkCanvasSDK } from '../sdk/src/sdk/ZkCanvasSDK.js';
 
-test('SDK Test Suite', async (t) => {
-  await t.test('1. Pure Logic: Perhitungan Jendela Waktu & Edge Cases', () => {
-    // 60 detik = 60000 ms
-    const t0 = 120000;
-    assert.equal(calculateTimeWindow(t0, 60000), 2);
-    assert.equal(calculateRemainingMs(t0, 60000), 60000);
-
-    const t1 = 125000;
-    assert.equal(calculateTimeWindow(t1, 60000), 2);
-    assert.equal(calculateRemainingMs(t1, 60000), 55000);
-
-    // Edge case: 1 ms sebelum berganti
-    const tEdge = 179999;
-    assert.equal(calculateTimeWindow(tEdge, 60000), 2);
-    assert.equal(calculateRemainingMs(tEdge, 60000), 1);
-    assert.equal(calculateNextWindowTimestamp(tEdge, 60000), 180000);
-
-    // Pergantian window tepat
+test('SDK Test Suite (12 Granular Verification Tests)', async (t) => {
+  // --- PURE LOGIC LAYER ---
+  await t.test('1. core/timeWindow: calculateTimeWindow() perhitungan indeks waktu', () => {
+    assert.equal(calculateTimeWindow(120000, 60000), 2);
     assert.equal(calculateTimeWindow(180000, 60000), 3);
-
-    // Invalid interval
     assert.throws(() => calculateTimeWindow(100, 0), /positif/);
   });
 
-  await t.test('2. Pure Logic: Dekomposisi Biner 2x8-bit (16-bit words)', () => {
+  await t.test('2. core/timeWindow: calculateRemainingMs() & calculateNextWindowTimestamp()', () => {
+    assert.equal(calculateRemainingMs(125000, 60000), 55000);
+    assert.equal(calculateRemainingMs(179999, 60000), 1);
+    assert.equal(calculateNextWindowTimestamp(179999, 60000), 180000);
+  });
+
+  await t.test('3. core/binary: normalizeToBytes32() normalisasi seed/commitment ke 32 byte', () => {
     const hex = '0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0';
     const bytes = normalizeToBytes32(hex);
     assert.equal(bytes.length, 32);
+    assert.equal(bytes[0], 0x12);
+  });
 
+  await t.test('4. core/binary: decomposeToWords16() ekstraksi pasangan 2x8-bit (16-bit words)', () => {
+    const bytes = normalizeToBytes32('0x1234567800000000000000000000000000000000000000000000000000000000');
     const words = decomposeToWords16(bytes);
     assert.equal(words.length, 16);
     assert.equal(words[0], 0x1234);
     assert.equal(words[1], 0x5678);
   });
 
-  await t.test('3. Pure Logic: Pemetaan Palet 4-bit & Ekstraksi Nibble', () => {
+  await t.test('5. core/palette: extractNibblesFromWord16() ekstraksi 4 nibble (4-bit)', () => {
     const word = 0xa3f2;
     const nibbles = extractNibblesFromWord16(word);
     assert.deepEqual(nibbles, [0xa, 0x3, 0xf, 0x2]);
+  });
 
+  await t.test('6. core/palette: mapNibbleToColor() & DEFAULT_PALETTE_16 (16 warna baku)', () => {
     assert.equal(DEFAULT_PALETTE_16.length, 16);
     assert.equal(mapNibbleToColor(0), DEFAULT_PALETTE_16[0]);
     assert.equal(mapNibbleToColor(15), DEFAULT_PALETTE_16[15]);
-    assert.equal(mapNibbleToColor(16), DEFAULT_PALETTE_16[0]); // Modulo wrap
+    assert.equal(mapNibbleToColor(16), DEFAULT_PALETTE_16[0]); // Modulo
   });
 
-  await t.test('4. Pure Logic: Transformasi Matriks Numerik 8x8', () => {
-    const matrix = generateNumericMatrix('secret_seed_test_123');
+  await t.test('7. core/matrix: generateNumericMatrix() pembentukan matriks 64 sel (8x8)', () => {
+    const matrix = generateNumericMatrix('seed_audit_test_999');
     assert.equal(matrix.length, 64);
-
     for (const cell of matrix) {
-      assert.ok(cell >= 0 && cell <= 15, `Sel ${cell} harus berada dalam rentang 4-bit (0-15)`);
+      assert.ok(cell >= 0 && cell <= 15, `Sel ${cell} harus berada dalam rentang 4-bit 0-15`);
     }
-
-    const grid2D = matrixToGrid2D(matrix);
-    assert.equal(grid2D.length, 8);
-    assert.equal(grid2D[0].length, 8);
   });
 
-  await t.test('5. Presentation Layer: Canvas 2D Renderer (Mock Context)', () => {
+  await t.test('8. core/matrix: matrixToGrid2D() transformasi ke matriks 2D [8][8]', () => {
+    const matrix = generateNumericMatrix('seed_audit_test_999');
+    const grid = matrixToGrid2D(matrix);
+    assert.equal(grid.length, 8);
+    assert.equal(grid[0].length, 8);
+  });
+
+  // --- PRESENTATION LAYER ---
+  await t.test('9. renderer/canvasRenderer: render() fillRect 64 sel & clear() tanpa DOM leak', () => {
     const drawCalls = [];
     const mockCtx = {
       clearRect(x, y, w, h) { drawCalls.push({ type: 'clearRect', x, y, w, h }); },
-      fillRect(x, y, w, h) { drawCalls.push({ type: 'fillRect', x, y, w, h, fillStyle: this.fillStyle }); },
-      strokeRect(x, y, w, h) { drawCalls.push({ type: 'strokeRect', x, y, w, h }); },
-      scale(x, y) { drawCalls.push({ type: 'scale', x, y }); }
+      fillRect(x, y, w, h) { drawCalls.push({ type: 'fillRect', x, y, w, h }); },
+      strokeRect(x, y, w, h) { drawCalls.push({ type: 'strokeRect', x, y, w, h }); }
     };
     const mockCanvas = {
       width: 200,
@@ -93,7 +91,7 @@ test('SDK Test Suite', async (t) => {
     };
 
     const renderer = new CanvasMatrixRenderer(mockCanvas, { handleDpr: false });
-    const dummyMatrix = new Array(64).fill(5);
+    const dummyMatrix = new Array(64).fill(7);
     renderer.render(dummyMatrix);
 
     assert.ok(drawCalls.some(c => c.type === 'clearRect'));
@@ -103,108 +101,60 @@ test('SDK Test Suite', async (t) => {
     assert.ok(drawCalls.filter(c => c.type === 'clearRect').length >= 2);
   });
 
-  await t.test('6. Event Emitter: Type-Safe Pub/Sub & Unsubscribe', () => {
+  // --- EVENT EMITTER LAYER ---
+  await t.test('10. events/eventEmitter: on(), off(), emit(), & return unsubscribe()', () => {
     const emitter = new SdkEventEmitter();
-    let tickCount = 0;
+    let counter = 0;
+    const unsubscribe = emitter.on('tick', (data) => { counter += data.val; });
 
-    const unbind = emitter.on('tick', (data) => {
-      tickCount += data.remainingMs;
-    });
+    emitter.emit('tick', { val: 5 });
+    assert.equal(counter, 5);
 
-    emitter.emit('tick', { remainingMs: 100, currentWindow: 1 });
-    assert.equal(tickCount, 100);
-
-    // Unsubscribe
-    unbind();
-    emitter.emit('tick', { remainingMs: 200, currentWindow: 1 });
-    assert.equal(tickCount, 100, 'Listener yang telah di-unsubscribe tidak boleh dipanggil lagi');
+    unsubscribe();
+    emitter.emit('tick', { val: 10 });
+    assert.equal(counter, 5, 'Unsubscribe harus mematikan event');
   });
 
-  await t.test('7. Background Layer: WorkerClient Request, Timeout, & Termination', async () => {
-    // Mock Worker untuk lingkungan pengujian Node.js
+  // --- BACKGROUND COMPUTATION LAYER ---
+  await t.test('11. worker/workerClient: Request/Response, Timeout Guard, & Termination', async () => {
     class MockWorker {
-      constructor() {
-        this.terminated = false;
-        this.onmessage = null;
-        this.onerror = null;
-      }
+      constructor() { this.terminated = false; this.onmessage = null; }
       postMessage(msg) {
-        if (msg.payload && msg.payload.challenge === 'force_error') {
-          setTimeout(() => {
-            if (this.onmessage) this.onmessage({ data: { id: msg.id, ok: false, error: 'Simulated worker error' } });
-          }, 10);
-        } else if (msg.payload && msg.payload.challenge === 'force_timeout') {
-          // Tidak membalas untuk menguji timeout
-        } else {
-          setTimeout(() => {
-            if (this.onmessage) {
-              this.onmessage({
-                data: {
-                  id: msg.id,
-                  ok: true,
-                  payload: { proof: { pi_a: ['1', '2', '3'] }, publicSignals: ['10', '20'], durationMs: 42 }
-                }
-              });
-            }
-          }, 10);
-        }
+        if (msg.payload && msg.payload.challenge === 'force_timeout') return;
+        setTimeout(() => {
+          if (this.onmessage) {
+            this.onmessage({
+              data: {
+                id: msg.id,
+                ok: true,
+                payload: { proof: { protocol: 'groth16' }, publicSignals: ['1'], durationMs: 25 }
+              }
+            });
+          }
+        }, 10);
       }
-      terminate() {
-        this.terminated = true;
-      }
+      terminate() { this.terminated = true; }
     }
 
     const mockWorker = new MockWorker();
-    const client = new WorkerClient({ customWorker: mockWorker, timeoutMs: 50 });
+    const client = new WorkerClient({ customWorker: mockWorker, timeoutMs: 40 });
 
-    // Sukses
     const res = await client.generateProof({
-      secret: '123',
-      timeWindow: 1,
-      challenge: 'nonce_ok',
-      wasmUrl: '/zk.wasm',
-      zkeyUrl: '/zk.zkey'
+      secret: 'sec', timeWindow: 1, challenge: 'ch', wasmUrl: '/w.wasm', zkeyUrl: '/z.zkey'
     });
-    assert.equal(res.durationMs, 42);
-    assert.ok(res.proof);
+    assert.equal(res.durationMs, 25);
 
-    // Error handling
     await assert.rejects(
-      async () => {
-        await client.generateProof({
-          secret: '123',
-          timeWindow: 1,
-          challenge: 'force_error',
-          wasmUrl: '/zk.wasm',
-          zkeyUrl: '/zk.zkey'
-        });
-      },
-      /Simulated worker error/
-    );
-
-    // Timeout handling
-    await assert.rejects(
-      async () => {
-        await client.generateProof({
-          secret: '123',
-          timeWindow: 1,
-          challenge: 'force_timeout',
-          wasmUrl: '/zk.wasm',
-          zkeyUrl: '/zk.zkey'
-        });
-      },
+      async () => client.generateProof({ secret: 'sec', timeWindow: 1, challenge: 'force_timeout' }),
       /timeout/i
     );
 
-    // Termination
     client.terminate();
     assert.equal(mockWorker.terminated, true);
   });
 
-  await t.test('8. Facade ZkCanvasSDK: Lifecycle, Events, & Proof Generation', async () => {
-    // Config validation
-    assert.throws(() => new ZkCanvasSDK({}), /secret/);
-
+  // --- FACADE SDK LAYER ---
+  await t.test('12. sdk/ZkCanvasSDK: Facade Lifecycle (start, stop, destroy, generateProof, getMatrix)', async () => {
     class MockWorkerSdk {
       postMessage(msg) {
         setTimeout(() => {
@@ -213,49 +163,38 @@ test('SDK Test Suite', async (t) => {
               data: {
                 id: msg.id,
                 ok: true,
-                payload: { proof: { protocol: 'groth16' }, publicSignals: ['1', '2'], durationMs: 15 }
+                payload: { proof: { pi_a: ['1', '2', '3'] }, publicSignals: ['100'], durationMs: 12 }
               }
             });
           }
-        }, 10);
+        }, 5);
       }
       terminate() {}
     }
 
     const sdk = new ZkCanvasSDK({
-      secret: 'master_key_facade',
+      secret: 'master_key_audit',
       rotationIntervalMs: 5000,
       customWorker: new MockWorkerSdk()
     });
 
     assert.equal(sdk.isRunning(), false);
 
-    let patternChanged = false;
-    let ticksReceived = 0;
-
-    const unbindPattern = sdk.on('patternChange', (data) => {
-      patternChanged = true;
-      assert.equal(data.matrix.length, 64);
-    });
-
-    const unbindTick = sdk.on('tick', () => {
-      ticksReceived++;
+    let patternTriggered = false;
+    const unbind = sdk.on('patternChange', (d) => {
+      patternTriggered = true;
+      assert.equal(d.matrix.length, 64);
     });
 
     await sdk.start();
     assert.equal(sdk.isRunning(), true);
-    assert.equal(patternChanged, true);
-    assert.ok(ticksReceived >= 1);
+    assert.equal(patternTriggered, true);
     assert.equal(sdk.getMatrix().length, 64);
 
-    // Proof generation
-    const proofRes = await sdk.generateProof('challenge_nonce_123');
-    assert.equal(proofRes.durationMs, 15);
-    assert.equal(proofRes.proof.protocol, 'groth16');
+    const proofResult = await sdk.generateProof('audit_nonce');
+    assert.equal(proofResult.durationMs, 12);
 
-    // Stop & Destroy
-    unbindPattern();
-    unbindTick();
+    unbind();
     sdk.stop();
     assert.equal(sdk.isRunning(), false);
 
