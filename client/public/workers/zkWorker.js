@@ -1,7 +1,14 @@
 /* global importScripts, snarkjs */
 
-// Memuat library snarkjs di dalam thread background Web Worker
-importScripts('/vendor/snarkjs.min.js');
+try {
+  importScripts('/vendor/snarkjs.min.js');
+} catch {
+  try {
+    importScripts('/public/vendor/snarkjs.min.js');
+  } catch {
+    importScripts('../vendor/snarkjs.min.js');
+  }
+}
 
 self.onmessage = async (event) => {
   const { action, payload } = event.data;

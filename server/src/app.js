@@ -22,7 +22,14 @@ app.use(express.static(clientPath));
 
 // Sajikan artefak sirkuit ZKP (WASM, zkey, vkey)
 const zkArtifactsPath = path.join(__dirname, '../../circuits/build');
+const clientPublicZk = path.join(__dirname, '../../client/public/zk');
+const clientVendor = path.join(__dirname, '../../client/public/vendor');
+const clientWorkers = path.join(__dirname, '../../client/public/workers');
+
 app.use('/zk', express.static(zkArtifactsPath));
+app.use('/zk', express.static(clientPublicZk));
+app.use('/vendor', express.static(clientVendor));
+app.use('/workers', express.static(clientWorkers));
 
 import { createRateLimiter } from './rateLimiter.js';
 
