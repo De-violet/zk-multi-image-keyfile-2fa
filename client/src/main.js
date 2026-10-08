@@ -2,6 +2,18 @@ import { hashFileDeterministic, sortImageFieldElements, hasDuplicateHashes } fro
 import { generateAutoSalt, deriveSaltFromUsername, downloadBackupKey } from './crypto/saltManager.js';
 import { computeHierarchicalCommitment } from './crypto/poseidon.js';
 import { generateZkProof, verifyZkProof } from './crypto/zkProver.js';
+import { generateVisualPattern, VISUAL_PALETTE_16 } from './crypto/visualGenerator.js';
+import { MatrixRenderer } from './ui/matrixRenderer.js';
+import { generateVisualProof } from './zkClientService.js';
+
+if (typeof window !== 'undefined') {
+  window.visualTotp = {
+    generateVisualPattern,
+    MatrixRenderer,
+    generateVisualProof,
+    VISUAL_PALETTE_16
+  };
+}
 
 // State aplikasi in-memory murni
 const state = {

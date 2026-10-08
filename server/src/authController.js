@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { db } from './db.js';
 import { nonceManager, SNARK_SCALAR_FIELD } from './nonceManager.js';
-import { verifyZkProof } from './zkVerifier.js';
+import { verifyZkProof, verifyVisualTotpProof } from './zkVerifier.js';
 import { sessionManager } from './sessionManager.js';
 
 // Helper validasi input
@@ -204,11 +204,18 @@ export const authController = {
    */
   async verify2fa(req, res) {
     try {
-      const { username, sessionNonce, sessionAuthToken, proof } = req.body;
+      const {
+        username,
+        sessionNonce,
+        sessionAuthToken,
+        proof,
+        publicSignals,
+        clientTimeWindow
+      } = req.body;
 
-      if (!username || !sessionNonce || !sessionAuthToken || !proof) {
+      if (!username || !sessionNonce || !proof || (!sessionAuthToken && !publicSignals)) {
         return res.status(400).json({
-          error: 'Payload tidak lengkap. Diperlukan: username, sessionNonce, sessionAuthToken, proof.'
+          error: 'Payload tidak lengkap. Diperlukan: username, sessionNonce, proof, dan sessionAuthToken atau publicSignals.'
         });
       }
 
@@ -225,17 +232,28 @@ export const authController = {
         });
       }
 
-      // 2. Verifikasi bukti ZK Groth16
-      const zkResult = await verifyZkProof(
-        sessionAuthToken,
-        user.rootCommitment,
-        sessionNonce,
-        proof
-      );
+      // 2. Verifikasi ZK: Dukung Visual TOTP (dengan toleransi time drift ±1 siklus) dan legacy keyfile
+      let zkResult;
+      if (publicSignals && Array.isArray(publicSignals) && publicSignals.length >= 4) {
+        const timeWin = clientTimeWindow !== undefined ? clientTimeWindow : publicSignals[2];
+        zkResult = await verifyVisualTotpProof({
+          proof,
+          publicSignals,
+          clientTimeWindow: timeWin,
+          sessionNonce
+        });
+      } else {
+        zkResult = await verifyZkProof(
+          sessionAuthToken,
+          user.rootCommitment,
+          sessionNonce,
+          proof
+        );
+      }
 
       if (!zkResult.valid) {
         return res.status(401).json({
-          error: 'Zero-Knowledge Proof tidak valid atau tidak cocok dengan file kunci / nonce.',
+          error: zkResult.error || 'Zero-Knowledge Proof tidak valid atau tidak cocok dengan file kunci / nonce.',
           verificationDurationMs: zkResult.durationMs,
           zkError: zkResult.error
         });

@@ -17,11 +17,14 @@ self.onmessage = async (event) => {
         serverNonce: serverNonce.toString()
       };
 
+      const finalWasm = wasmPath || '/zk/VisualTOTP.wasm';
+      const finalZkey = zkeyPath || '/zk/VisualTOTP_final.zkey';
+
       // Eksekusi witness calculation dan Groth16 proof generation di background thread
       const { proof, publicSignals } = await snarkjs.groth16.fullProve(
         circuitInput,
-        wasmPath,
-        zkeyPath
+        finalWasm,
+        finalZkey
       );
 
       const durationMs = Math.round(performance.now() - startTime);

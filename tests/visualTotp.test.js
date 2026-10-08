@@ -144,4 +144,51 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
 
     assert.equal(responseStatus, 401);
   });
+
+  await t.test('5. visualGenerator: Bit-packing (2x8-bit) dan ekstraksi 4-bit (16 palet)', async () => {
+    const { generateVisualPattern, VISUAL_PALETTE_16 } = await import('../client/src/crypto/visualGenerator.js');
+    const pattern = generateVisualPattern('0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0');
+
+    assert.equal(pattern.cells.length, 64);
+    assert.equal(pattern.palette.length, 16);
+    assert.equal(pattern.grid.length, 8);
+    assert.equal(pattern.grid[0].length, 8);
+
+    for (const cell of pattern.cells) {
+      assert.ok(cell >= 0 && cell < 16, `Indeks sel ${cell} harus dalam rentang 0-15`);
+    }
+  });
+
+  await t.test('6. zkVerifier: verifyVisualTotpProof mengarahkan ke VisualTOTP_vkey.json & drift ±1', async () => {
+    const { verifyVisualTotpProof } = await import('../server/src/zkVerifier.js');
+    const freshNonce = issueVisualNonce('session-test-verifier');
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      {
+        masterSecret,
+        timeWindow: timeWindow.toString(),
+        serverNonce: freshNonce
+      },
+      WASM_PATH,
+      ZKEY_PATH
+    );
+
+    // Kasus Valid
+    const resValid = await verifyVisualTotpProof({
+      proof,
+      publicSignals,
+      clientTimeWindow: timeWindow,
+      sessionNonce: freshNonce
+    });
+    assert.equal(resValid.valid, true);
+
+    // Kasus Drift melebihi ±1
+    const resDrift = await verifyVisualTotpProof({
+      proof,
+      publicSignals,
+      clientTimeWindow: timeWindow - 3,
+      sessionNonce: freshNonce
+    });
+    assert.equal(resDrift.valid, false);
+    assert.match(resDrift.error, /drift/i);
+  });
 });
