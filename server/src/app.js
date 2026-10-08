@@ -43,6 +43,7 @@ const recoveryLimiter = createRateLimiter({
 app.post('/api/auth/register', authLimiter, authController.register);
 app.post('/api/auth/login', authLimiter, authController.login);
 app.post('/api/auth/challenge', authLimiter, authController.challenge);
+app.post('/api/auth/visual-challenge', authLimiter, authController.visualChallenge);
 app.post('/api/auth/verify-2fa', authLimiter, authController.verify2fa);
 app.post('/api/auth/recover-challenge', recoveryLimiter, authController.recoverChallenge);
 app.post('/api/auth/recover-reset', recoveryLimiter, authController.recoverReset);

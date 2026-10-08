@@ -200,6 +200,26 @@ export const authController = {
   },
 
   /**
+   * Permintaan Nonce Ephemeral Visual TOTP
+   */
+  async visualChallenge(req, res) {
+    try {
+      const { username } = req.body || {};
+      const targetUser = (username && typeof username === 'string') ? username.trim() : 'demo_user';
+      const challenge = nonceManager.issueNonce(targetUser);
+
+      return res.status(200).json({
+        success: true,
+        sessionNonce: challenge.sessionNonce,
+        timeWindow: Math.floor(Date.now() / 1000 / 60),
+        expiresIn: challenge.expiresIn
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Internal server error saat pembuatan visual challenge.' });
+    }
+  },
+
+  /**
    * Verifikasi 2FA ZK-Proof & Penerbitan Token Sesi (Fase 3)
    */
   async verify2fa(req, res) {

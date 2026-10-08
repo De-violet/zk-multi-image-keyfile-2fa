@@ -159,6 +159,7 @@
         <button id="tabBtnRegister" class="tab-btn active">1. Daftar Akun</button>
         <button id="tabBtnLogin" class="tab-btn">2. Login Akun</button>
         <button id="tabBtnVerifier" class="tab-btn btn-highlight">3. Verifier</button>
+        <button id="tabBtnVisualTotp" class="tab-btn">4. Visual TOTP</button>
       </div>
 
       <!-- ================= 1. DAFTAR AKUN ================= -->
@@ -423,6 +424,37 @@
           </div>
         </div>
 
+      </div>
+
+      <!-- ================= 4. VISUAL TOTP ================= -->
+      <div id="sectionVisualTotp" class="form-content" style="display: none; flex-direction: column; align-items: center; gap: 16px;">
+        <div class="form-step-badge">Visual TOTP: Dynamic Pattern & ZK Prover</div>
+
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 320px;">
+          <div style="position: relative; width: 200px; height: 200px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000;">
+            <canvas id="totpCanvas" width="200" height="200" style="display: block; width: 100%; height: 100%;"></canvas>
+          </div>
+          
+          <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #a1a1aa;">
+            Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">60s</strong>
+          </div>
+
+          <div class="form-group" style="width: 100%;">
+            <label for="totpMasterSecret">Master Secret (Private)</label>
+            <input type="password" id="totpMasterSecret" placeholder="Masukkan master secret" value="12345678901234567890">
+          </div>
+
+          <div class="form-group" style="width: 100%;">
+            <label for="totpUsername">Username Akun</label>
+            <input type="text" id="totpUsername" placeholder="Username untuk challenge" value="demo_user">
+          </div>
+
+          <button type="button" id="btnAuthVisualTotp" class="btn-primary" style="width: 100%;">
+            Autentikasi (SnarkJS Web Worker)
+          </button>
+          
+          <div id="totpStatus" class="status-msg" style="display: none; width: 100%;"></div>
+        </div>
       </div>
 
     </div>

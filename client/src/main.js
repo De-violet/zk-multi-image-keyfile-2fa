@@ -374,11 +374,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const tabBtnRegister = document.getElementById('tabBtnRegister');
   const tabBtnLogin = document.getElementById('tabBtnLogin');
   const tabBtnVerifier = document.getElementById('tabBtnVerifier');
+  const tabBtnVisualTotp = document.getElementById('tabBtnVisualTotp');
 
   const formRegister = document.getElementById('formRegister');
   const formLogin = document.getElementById('formLogin');
   const formRecovery = document.getElementById('formRecovery');
   const sectionVerifier = document.getElementById('sectionVerifier');
+  const sectionVisualTotp = document.getElementById('sectionVisualTotp');
   const authCard = document.getElementById('authCard');
   const successCard = document.getElementById('successCard');
 
@@ -391,11 +393,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtnRegister.classList.add('active');
     tabBtnLogin.classList.remove('active');
     tabBtnVerifier.classList.remove('active');
+    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
 
     formRegister.style.display = 'flex';
     formLogin.style.display = 'none';
     formRecovery.style.display = 'none';
     sectionVerifier.style.display = 'none';
+    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
 
     hideStatus('regStatus');
     hideStatus('loginStatus');
@@ -411,11 +415,13 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtnLogin.classList.add('active');
     tabBtnRegister.classList.remove('active');
     tabBtnVerifier.classList.remove('active');
+    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
 
     formLogin.style.display = 'flex';
     formRegister.style.display = 'none';
     formRecovery.style.display = 'none';
     sectionVerifier.style.display = 'none';
+    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
 
     hideStatus('regStatus');
     hideStatus('loginStatus');
@@ -431,16 +437,135 @@ document.addEventListener('DOMContentLoaded', () => {
     tabBtnVerifier.classList.add('active');
     tabBtnRegister.classList.remove('active');
     tabBtnLogin.classList.remove('active');
+    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
 
     sectionVerifier.style.display = 'flex';
     formRegister.style.display = 'none';
     formLogin.style.display = 'none';
     formRecovery.style.display = 'none';
+    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
+  }
+
+  // Tab 4: Visual TOTP
+  let totpRenderer = null;
+  function showVisualTotpTab() {
+    appContainer.classList.remove('wide-mode');
+    authCard.style.display = 'block';
+    successCard.style.display = 'none';
+
+    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.add('active');
+    tabBtnRegister.classList.remove('active');
+    tabBtnLogin.classList.remove('active');
+    tabBtnVerifier.classList.remove('active');
+
+    if (sectionVisualTotp) sectionVisualTotp.style.display = 'flex';
+    formRegister.style.display = 'none';
+    formLogin.style.display = 'none';
+    formRecovery.style.display = 'none';
+    sectionVerifier.style.display = 'none';
+
+    hideStatus('totpStatus');
+
+    const canvas = document.getElementById('totpCanvas');
+    if (canvas && !totpRenderer) {
+      const windowLabel = document.getElementById('totpWindowLabel');
+      const secondsLeftEl = document.getElementById('totpSecondsLeft');
+      const secretInput = document.getElementById('totpMasterSecret');
+
+      totpRenderer = new MatrixRenderer(canvas, {
+        intervalSec: 60,
+        onTick: (sec) => {
+          if (secondsLeftEl) secondsLeftEl.textContent = sec + 's';
+        },
+        onWindowChange: (win) => {
+          if (windowLabel) windowLabel.textContent = win;
+          const secret = secretInput ? secretInput.value.trim() : '12345678901234567890';
+          let seed = '0x' + win.toString(16).padStart(16, '0');
+          if (typeof window !== 'undefined' && window.poseidon && window.poseidon.poseidon) {
+            try {
+              seed = window.poseidon.poseidon([BigInt(secret || 0), BigInt(win)]).toString();
+            } catch (e) {}
+          }
+          const pattern = generateVisualPattern(seed);
+          totpRenderer.drawMatrix(pattern.cells, pattern.palette);
+        }
+      });
+      totpRenderer.startTimer();
+    }
   }
 
   tabBtnRegister.addEventListener('click', showRegisterTab);
   tabBtnLogin.addEventListener('click', showLoginTab);
   tabBtnVerifier.addEventListener('click', showVerifierTab);
+  if (tabBtnVisualTotp) tabBtnVisualTotp.addEventListener('click', showVisualTotpTab);
+
+  const btnAuthVisualTotp = document.getElementById('btnAuthVisualTotp');
+  if (btnAuthVisualTotp) {
+    btnAuthVisualTotp.addEventListener('click', async () => {
+      const secretInput = document.getElementById('totpMasterSecret');
+      const userInput = document.getElementById('totpUsername');
+      const masterSecret = secretInput ? secretInput.value.trim() : '';
+      const username = userInput ? userInput.value.trim() : 'demo_user';
+
+      if (!masterSecret) {
+        showStatus('totpStatus', 'error', 'Master secret wajib diisi.');
+        return;
+      }
+
+      btnAuthVisualTotp.disabled = true;
+      showStatus('totpStatus', 'loading', 'Meminta ephemeral challenge nonce dari server...');
+
+      try {
+        const chalRes = await fetch('/api/auth/visual-challenge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+        const chalData = await chalRes.json();
+        if (!chalRes.ok || !chalData.success) {
+          throw new Error(chalData.error || 'Gagal memperoleh ephemeral nonce.');
+        }
+
+        const serverNonce = chalData.sessionNonce;
+        const timeWindow = chalData.timeWindow || Math.floor(Date.now() / 1000 / 60);
+
+        showStatus('totpStatus', 'loading', 'Menghitung Groth16 Proof di SnarkJS Web Worker...');
+
+        const { proof, publicSignals, durationMs } = await generateVisualProof({
+          masterSecret,
+          timeWindow,
+          serverNonce,
+          wasmPath: '/zk/VisualTOTP.wasm',
+          zkeyPath: '/zk/VisualTOTP_final.zkey'
+        });
+
+        showStatus('totpStatus', 'loading', `Proof selesai (${durationMs}ms). Memvalidasi ke server...`);
+
+        const verifyRes = await fetch('/api/auth/verify-2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username,
+            sessionNonce,
+            proof,
+            publicSignals,
+            clientTimeWindow: timeWindow
+          })
+        });
+
+        const verifyData = await verifyRes.json();
+        if (!verifyRes.ok || !verifyData.success) {
+          throw new Error(verifyData.error || 'Verifikasi 2FA server gagal.');
+        }
+
+        showStatus('totpStatus', 'success', `✓ Autentikasi Visual TOTP Berhasil! Waktu komputasi proof: ${durationMs}ms.`);
+      } catch (err) {
+        showStatus('totpStatus', 'error', 'Autentikasi gagal: ' + err.message);
+      } finally {
+        btnAuthVisualTotp.disabled = false;
+      }
+    });
+  }
 
   // Navigasi Mode Pemulihan Akun (Lupa Password)
   document.getElementById('btnShowRecovery').addEventListener('click', () => {

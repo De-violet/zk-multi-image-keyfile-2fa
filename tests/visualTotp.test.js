@@ -191,4 +191,45 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
     assert.equal(resDrift.valid, false);
     assert.match(resDrift.error, /drift/i);
   });
+
+  await t.test('7. Pembuktian matematika ditolak jika secret salah atau sinyal publik dimanipulasi', async () => {
+    const { verifyVisualTotpProof } = await import('../server/src/zkVerifier.js');
+    const attackerSecret = '99999999999999999999';
+    const freshNonce = issueVisualNonce('session-test-attacker');
+
+    // Attacker menghasilkan proof dari secret yang salah
+    const { proof: attackerProof, publicSignals: attackerSignals } = await snarkjs.groth16.fullProve(
+      {
+        masterSecret: attackerSecret,
+        timeWindow: timeWindow.toString(),
+        serverNonce: freshNonce
+      },
+      WASM_PATH,
+      ZKEY_PATH
+    );
+
+    // 1. Jika attacker mencoba memalsukan publicSignals (misal mencocokkan imageCommitment korban)
+    const tamperedSignals = [...attackerSignals];
+    tamperedSignals[0] = '123456789'; // imageCommitment palsu
+
+    const resTampered = await verifyVisualTotpProof({
+      proof: attackerProof,
+      publicSignals: tamperedSignals,
+      clientTimeWindow: timeWindow,
+      sessionNonce: freshNonce
+    });
+    assert.equal(resTampered.valid, false, 'Manipulasi komitmen pada bukti matematika harus ditolak.');
+
+    // 2. Jika attacker mencoba memasukkan nonce yang berbeda
+    const tamperedNonceSignals = [...attackerSignals];
+    tamperedNonceSignals[3] = '987654321'; // nonce tidak cocok
+
+    const resNonceMismatch = await verifyVisualTotpProof({
+      proof: attackerProof,
+      publicSignals: tamperedNonceSignals,
+      clientTimeWindow: timeWindow,
+      sessionNonce: freshNonce
+    });
+    assert.equal(resNonceMismatch.valid, false, 'Mismatch serverNonce harus ditolak.');
+  });
 });
