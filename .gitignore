@@ -6,7 +6,7 @@ yarn-error.log*
 *.log
 .env
 .cache/
-dist/
+/dist/
 artifacts/
 cache_hardhat/
 out/

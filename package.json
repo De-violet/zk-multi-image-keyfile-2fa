@@ -9,6 +9,7 @@
     "download:ptau": "bash circuits/scripts/download_ptau.sh",
     "download:artifacts": "bash circuits/scripts/download_zk_artifacts.sh",
     "build:sdk": "node sdk/scripts/build.js",
+    "prepare": "node sdk/scripts/build.js",
     "start": "node --env-file-if-exists=.env server/src/app.js",
     "dev": "node --env-file-if-exists=.env server/src/app.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
