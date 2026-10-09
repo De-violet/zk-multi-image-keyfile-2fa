@@ -35,52 +35,106 @@
     <!-- Kartu Utama -->
     <div id="authCard" class="card">
       <div class="tabs">
-        <button id="tabBtnAuthenticator" class="tab-btn active">Visual TOTP</button>
-        <button id="tabBtnInspector" class="tab-btn">SDK Inspector</button>
+        <button id="tabBtnLogin" class="tab-btn active">Masuk (Login)</button>
+        <button id="tabBtnGenerator" class="tab-btn">Pembuat Gambar 2FA (45s)</button>
       </div>
 
-      <!-- Tab 1: Visual TOTP Authenticator -->
-      <div id="viewAuthenticator" class="form-content" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
-        <div class="form-step-badge">Faktor Kedua Dinamis: Pola Visual Matriks & ZK-Proof</div>
+      <!-- Tampilan 1: Form Login Awal -->
+      <div id="viewLogin" class="form-content" style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="form-step-badge">Langkah 1: Masuk Akun atau Pemulihan 2FA</div>
 
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 320px;">
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input type="text" id="loginUsername" placeholder="Masukkan username" value="demo_user">
+        </div>
+
+        <div class="form-group" id="passwordGroup">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="Masukkan password" value="password123">
+        </div>
+
+        <button type="button" id="btnLoginNormal" class="btn-primary" style="width: 100%;">
+          Masuk dengan Password
+        </button>
+
+        <div style="text-align: center; margin-top: 4px;">
+          <button type="button" id="btnForgotPwd" style="background: none; border: none; color: #a1a1aa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
+            Lupa Password? Masuk via Kunci Gambar 2FA
+          </button>
+        </div>
+
+        <!-- Panel Pemulihan via Gambar (Muncul saat Lupa Password ditekan) -->
+        <div id="recoveryPanel" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px; padding-top: 14px; border-top: 1px dashed #27272a;">
+          <div style="font-size: 0.8rem; color: #a1a1aa;">
+            Opsi Pemulihan: Ambil gambar kunci visual (rotasi 45 detik) lalu tempel atau unggah di sini.
+          </div>
+
+          <button type="button" id="btnGoToGenerator" class="btn-secondary" style="width: 100%; font-size: 0.82rem;">
+            Buka Pembuat Gambar Kunci 2FA →
+          </button>
+
+          <!-- Input Gambar: Salin/Tempel atau Upload -->
+          <div style="display: flex; gap: 8px;">
+            <button type="button" id="btnPasteImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
+              Tempel Gambar (Paste)
+            </button>
+            <label class="btn-secondary" style="flex: 1; font-size: 0.8rem; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              Unggah File PNG
+              <input type="file" id="fileImageInput" accept="image/png,image/*" style="display: none;">
+            </label>
+          </div>
+
+          <!-- Preview Gambar yang Dimasukkan -->
+          <div id="imagePreviewContainer" style="display: none; align-items: center; gap: 12px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 10px;">
+            <img id="imgPreview" alt="Pratinjau Kunci" style="width: 64px; height: 64px; border-radius: 4px; border: 1px solid #3f3f46; image-rendering: pixelated; object-fit: contain;">
+            <div style="font-size: 0.78rem; color: #a1a1aa;">
+              <strong style="color: #22c55e;">✓ Gambar Kunci Terpasang</strong><br>
+              Siap diverifikasi dengan ZK-Proof (45 detik)
+            </div>
+          </div>
+
+          <button type="button" id="btnVerifyImageLogin" class="btn-primary" style="width: 100%; margin-top: 4px;">
+            Verifikasi Gambar & Masuk (ZK-Proof)
+          </button>
+        </div>
+
+        <div id="loginStatus" class="status-box" style="display: none; text-align: left;"></div>
+      </div>
+
+      <!-- Tampilan 2: Generator Gambar Kunci 2FA -->
+      <div id="viewGenerator" class="form-content" style="display: none; flex-direction: column; align-items: center; gap: 16px;">
+        <div class="form-step-badge">Kunci Visual Dinamis (Siklus Rotasi 45 Detik)</div>
+
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 320px;">
           <div style="position: relative; width: 200px; height: 200px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
             <canvas id="totpCanvas" width="200" height="200" style="display: block; width: 100%; height: 100%;"></canvas>
           </div>
-          
+
           <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #a1a1aa;">
-            Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">60s</strong>
+            Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">45s</strong>
           </div>
 
           <div class="form-group" style="width: 100%;">
-            <label for="totpMasterSecret">Master Secret (Kunci Rahasia Klien)</label>
-            <input type="password" id="totpMasterSecret" placeholder="Masukkan master secret" value="12345678901234567890">
+            <label for="totpMasterSecret">Master Secret</label>
+            <input type="password" id="totpMasterSecret" placeholder="Kunci rahasia" value="12345678901234567890">
           </div>
 
-          <div class="form-group" style="width: 100%;">
-            <label for="totpUsername">Username Akun</label>
-            <input type="text" id="totpUsername" placeholder="Username untuk verifikasi" value="demo_user">
+          <!-- Opsi Aksi Hanya Gambar Saja -->
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button type="button" id="btnDownloadImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
+              Unduh Gambar (PNG)
+            </button>
+            <button type="button" id="btnCopyImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
+              Salin Gambar
+            </button>
           </div>
 
-          <button type="button" id="btnAuthVisualTotp" class="btn-primary" style="width: 100%;">
-            Verifikasi 2FA (SnarkJS Web Worker)
+          <button type="button" id="btnUseImageForLogin" class="btn-primary" style="width: 100%; margin-top: 6px;">
+            Gunakan Gambar untuk Login →
           </button>
-          
-          <div id="totpStatus" class="status-box" style="display: none; width: 100%; text-align: left;"></div>
         </div>
-      </div>
 
-      <!-- Tab 2: SDK Inspector -->
-      <div id="viewInspector" class="form-content" style="display: none; flex-direction: column; gap: 12px;">
-        <div class="form-step-badge">State & Binary Inspector: ZK Canvas SDK</div>
-        <p class="input-hint">Informasi internal state SDK: ekstraksi nilai 4-bit per sel dari bit-packing 2x8-bit (16-bit words) yang dipetakan ke 16 palet warna baku.</p>
-        
-        <div style="background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.75rem; color: #a1a1aa;">
-          <div>SDK Status: <strong id="inspectorStatus" style="color:#22c55e;">RUNNING</strong></div>
-          <div>Active Window: <strong id="inspectorWindow" style="color:#ffffff;">-</strong></div>
-          <div style="margin-top: 8px;">64 Cell Indices:</div>
-          <div id="inspectorMatrix" style="word-break: break-all; margin-top: 4px; color:#e4e4e7;">-</div>
-        </div>
+        <div id="genStatus" class="status-box" style="display: none; width: 100%; text-align: left;"></div>
       </div>
     </div>
 

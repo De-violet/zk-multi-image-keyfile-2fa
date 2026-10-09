@@ -211,8 +211,8 @@ export const authController = {
       return res.status(200).json({
         success: true,
         sessionNonce: challenge.sessionNonce,
-        timeWindow: Math.floor(Date.now() / 1000 / 60),
-        expiresIn: challenge.expiresIn
+        timeWindow: Math.floor(Date.now() / 1000 / 45),
+        expiresIn: 45
       });
     } catch (err) {
       return res.status(500).json({ error: 'Internal server error saat pembuatan visual challenge.' });
