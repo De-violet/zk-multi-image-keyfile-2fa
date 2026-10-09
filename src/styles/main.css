@@ -732,3 +732,111 @@ input[type="password"]:focus {
   font-size: 0.75rem;
   color: var(--text-subtle);
 }
+
+/* Developer Playground Layout */
+.dev-playground-container {
+  width: 100%;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dev-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 860px) {
+  .dev-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dev-nav-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 12px 20px;
+  border-radius: 14px;
+}
+
+.dev-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-brand-badge {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  background: #27272a;
+  color: #a1a1aa;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #3f3f46;
+}
+
+.dev-console-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dev-console-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dev-console-body {
+  font-family: var(--font-mono);
+  font-size: 0.73rem;
+  background: #050507;
+  color: #d4d4d8;
+  height: 380px;
+  overflow-y: auto;
+  padding: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-entry {
+  margin-bottom: 4px;
+}
+
+.log-time {
+  color: #71717a;
+}
+
+.log-tag-sdk { color: #38bdf8; font-weight: 600; }
+.log-tag-prover { color: #a855f7; font-weight: 600; }
+.log-tag-server { color: #22c55e; font-weight: 600; }
+.log-tag-warn { color: #eab308; font-weight: 600; }
+.log-tag-err { color: #ef4444; font-weight: 600; }
+
+.code-snippet-box {
+  background: #050507;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #e4e4e7;
+  max-height: 360px;
+  overflow-y: auto;
+  white-space: pre;
+}

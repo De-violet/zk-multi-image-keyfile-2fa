@@ -3,197 +3,273 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ZK-OTP | Zero-Knowledge Visual TOTP 2FA</title>
-  <meta name="description" content="Zero-Knowledge Visual TOTP 2FA dengan Circom, SnarkJS, Groth16, Poseidon, dan Web Worker.">
+  <title>ZK-OTP Developer Playground | Zero-Knowledge Visual TOTP 2FA</title>
+  <meta name="description" content="Zero-Knowledge Visual TOTP 2FA Playground & SDK: Circom, SnarkJS, Groth16, Poseidon, dan Web Worker.">
   <link rel="stylesheet" href="./src/styles/main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-  
   <script src="./public/vendor/snarkjs.min.js"></script>
 </head>
 <body>
 
-  <div id="appContainer" class="main-container">
-    <!-- Header Aplikasi -->
-    <header class="simple-header">
-      <div class="logo-icon">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-        </svg>
+  <div id="appContainer" class="dev-playground-container">
+    <!-- Navbar / Header Developer -->
+    <header class="dev-nav-header">
+      <div class="dev-brand">
+        <div class="logo-icon" style="width: 38px; height: 38px; margin: 0; border-radius: 8px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong style="font-size: 1.05rem; letter-spacing: -0.01em;">ZK-OTP Authenticator</strong>
+            <span class="dev-brand-badge">SDK v1.0.0</span>
+          </div>
+          <p style="font-size: 0.75rem; color: #a1a1aa; margin: 0;">Interactive Playground • Visual TOTP & Groth16 Prover</p>
+        </div>
       </div>
-      <h1>ZK-OTP Authenticator</h1>
-      <p class="subtitle">Zero-Knowledge Visual TOTP 2FA • Matriks Dinamis 8x8 & Groth16 Prover</p>
-      
-      <div id="connectionBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.73rem; padding: 4px 12px; border-radius: 12px; background: #18181b; border: 1px solid #27272a; margin-top: 8px;">
-        <span id="connectionDot" style="width: 8px; height: 8px; border-radius: 50%; background: #71717a;"></span>
-        <span id="connectionText" style="color: #a1a1aa;">Mengecek koneksi server...</span>
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div id="connectionBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.73rem; padding: 4px 10px; border-radius: 12px; background: #18181b; border: 1px solid #27272a;">
+          <span id="connectionDot" style="width: 7px; height: 7px; border-radius: 50%; background: #71717a;"></span>
+          <span id="connectionText" style="color: #a1a1aa;">Cek Server...</span>
+        </div>
+        <a href="https://github.com/De-violet/zk-multi-image-keyfile-2fa" target="_blank" rel="noopener" class="btn-secondary" style="font-size: 0.75rem; padding: 5px 10px; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
       </div>
     </header>
 
-    <!-- Kartu Utama -->
-    <div id="authCard" class="card">
-      <div class="tabs">
-        <button id="tabBtnLogin" class="tab-btn active">Masuk (Login)</button>
-        <button id="tabBtnGenerator" class="tab-btn">Pembuat Gambar 2FA (45s)</button>
-      </div>
-
-      <!-- Tampilan 1: Form Login Awal -->
-      <div id="viewLogin" class="form-content" style="display: flex; flex-direction: column; gap: 14px;">
-        <div class="form-step-badge">Langkah 1: Masuk Akun atau Pemulihan 2FA</div>
-
-        <div class="form-group">
-          <label for="loginUsername">Username</label>
-          <input type="text" id="loginUsername" placeholder="Masukkan username" value="demo_user">
-        </div>
-
-        <div class="form-group" id="passwordGroup">
-          <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" placeholder="Masukkan password" value="password123">
-        </div>
-
-        <button type="button" id="btnLoginNormal" class="btn-primary" style="width: 100%;">
-          Masuk dengan Password
-        </button>
-
-        <div style="text-align: center; margin-top: 4px;">
-          <button type="button" id="btnForgotPwd" style="background: none; border: none; color: #a1a1aa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
-            Lupa Password? Masuk via Kunci Gambar 2FA
-          </button>
-        </div>
-
-        <!-- Panel Pemulihan via Gambar (Muncul saat Lupa Password ditekan) -->
-        <div id="recoveryPanel" style="display: none; flex-direction: column; gap: 12px; margin-top: 8px; padding-top: 14px; border-top: 1px dashed #27272a;">
-          <div style="font-size: 0.8rem; color: #a1a1aa;">
-            Opsi Pemulihan: Ambil gambar kunci visual (rotasi 45 detik) lalu tempel atau unggah di sini.
+    <!-- Grid 2 Kolom: Kolom Kiri App Sandbox, Kolom Kanan Dev Console & Docs -->
+    <div class="dev-grid">
+      <!-- Kolom Kiri: Live Sandbox -->
+      <div>
+        <div id="authCard" class="card" style="padding: 20px;">
+          <div class="tabs" style="margin-bottom: 16px;">
+            <button id="tabBtnLogin" class="tab-btn active">Masuk (Login)</button>
+            <button id="tabBtnGenerator" class="tab-btn">Pembuat Kunci 2FA (45s)</button>
           </div>
 
-          <button type="button" id="btnGoToGenerator" class="btn-secondary" style="width: 100%; font-size: 0.82rem;">
-            Buka Pembuat Gambar Kunci 2FA →
-          </button>
+          <!-- Tampilan 1: Form Login Awal -->
+          <div id="viewLogin" class="form-content" style="gap: 12px;">
+            <div class="form-step-badge">Faktor 1: Masuk Akun atau Pemulihan 2FA</div>
 
-          <!-- Input Gambar: Salin/Tempel atau Upload -->
-          <div style="display: flex; gap: 8px;">
-            <button type="button" id="btnPasteImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
-              Tempel Gambar (Paste)
+            <div class="form-group">
+              <label for="loginUsername">Username</label>
+              <input type="text" id="loginUsername" placeholder="Masukkan username" value="demo_user">
+            </div>
+
+            <div class="form-group" id="passwordGroup">
+              <label for="loginPassword">Password</label>
+              <input type="password" id="loginPassword" placeholder="Masukkan password" value="password123">
+            </div>
+
+            <button type="button" id="btnLoginNormal" class="btn-primary" style="width: 100%;">
+              Masuk dengan Password
             </button>
-            <label class="btn-secondary" style="flex: 1; font-size: 0.8rem; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-              Unggah File PNG
-              <input type="file" id="fileImageInput" accept="image/png,image/*" style="display: none;">
-            </label>
+
+            <div style="text-align: center;">
+              <button type="button" id="btnForgotPwd" style="background: none; border: none; color: #a1a1aa; font-size: 0.8rem; cursor: pointer; text-decoration: underline;">
+                Lupa Password? Masuk via Kunci Gambar 2FA
+              </button>
+            </div>
+
+            <!-- Panel Pemulihan via Gambar -->
+            <div id="recoveryPanel" style="display: none; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px dashed #27272a;">
+              <div style="font-size: 0.78rem; color: #a1a1aa;">
+                Ambil gambar kunci visual (rotasi 45 detik), lalu tempel atau unggah di bawah ini:
+              </div>
+
+              <button type="button" id="btnGoToGenerator" class="btn-secondary" style="width: 100%; font-size: 0.8rem;">
+                Buka Pembuat Gambar Kunci 2FA →
+              </button>
+
+              <div style="display: flex; gap: 8px;">
+                <button type="button" id="btnPasteImage" class="btn-secondary" style="flex: 1; font-size: 0.78rem;">
+                  Tempel Gambar (Paste)
+                </button>
+                <label class="btn-secondary" style="flex: 1; font-size: 0.78rem; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                  Unggah File PNG
+                  <input type="file" id="fileImageInput" accept="image/png,image/*" style="display: none;">
+                </label>
+              </div>
+
+              <!-- Preview Gambar yang Dimasukkan -->
+              <div id="imagePreviewContainer" style="display: none; align-items: center; gap: 12px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 8px 12px;">
+                <img id="imgPreview" alt="Pratinjau Kunci" style="width: 56px; height: 56px; border-radius: 4px; border: 1px solid #3f3f46; image-rendering: pixelated; object-fit: contain;">
+                <div style="font-size: 0.75rem; color: #a1a1aa;">
+                  <strong style="color: #22c55e;">✓ Gambar Kunci Terpasang</strong><br>
+                  Siap di-prove di Web Worker (45 detik)
+                </div>
+              </div>
+
+              <button type="button" id="btnVerifyImageLogin" class="btn-primary" style="width: 100%; margin-top: 2px;">
+                Verifikasi Gambar & Masuk (ZK-Proof)
+              </button>
+            </div>
+
+            <div id="loginStatus" class="status-box" style="display: none; text-align: left;"></div>
           </div>
 
-          <!-- Preview Gambar yang Dimasukkan -->
-          <div id="imagePreviewContainer" style="display: none; align-items: center; gap: 12px; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: 10px;">
-            <img id="imgPreview" alt="Pratinjau Kunci" style="width: 64px; height: 64px; border-radius: 4px; border: 1px solid #3f3f46; image-rendering: pixelated; object-fit: contain;">
-            <div style="font-size: 0.78rem; color: #a1a1aa;">
-              <strong style="color: #22c55e;">✓ Gambar Kunci Terpasang</strong><br>
-              Siap diverifikasi dengan ZK-Proof (45 detik)
+          <!-- Tampilan 2: Generator Gambar Kunci 2FA -->
+          <div id="viewGenerator" class="form-content" style="display: none; flex-direction: column; align-items: center; gap: 14px;">
+            <div class="form-step-badge">Faktor 2: Kunci Visual Dinamis (Siklus 45 Detik)</div>
+
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 300px;">
+              <div style="position: relative; width: 180px; height: 180px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                <canvas id="totpCanvas" width="180" height="180" style="display: block; width: 100%; height: 100%;"></canvas>
+              </div>
+
+              <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #a1a1aa;">
+                Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">45s</strong>
+              </div>
+
+              <div class="form-group" style="width: 100%;">
+                <label for="totpMasterSecret" style="font-size: 0.8rem;">Master Secret Klien</label>
+                <input type="password" id="totpMasterSecret" placeholder="Kunci rahasia" value="12345678901234567890">
+              </div>
+
+              <!-- Aksi Gambar Murni -->
+              <div style="display: flex; gap: 8px; width: 100%;">
+                <button type="button" id="btnDownloadImage" class="btn-secondary" style="flex: 1; font-size: 0.78rem;">
+                  Unduh Gambar (PNG)
+                </button>
+                <button type="button" id="btnCopyImage" class="btn-secondary" style="flex: 1; font-size: 0.78rem;">
+                  Salin Gambar
+                </button>
+              </div>
+
+              <button type="button" id="btnUseImageForLogin" class="btn-primary" style="width: 100%; margin-top: 4px;">
+                Gunakan Gambar untuk Login →
+              </button>
+            </div>
+
+            <div id="genStatus" class="status-box" style="display: none; width: 100%; text-align: left;"></div>
+          </div>
+        </div>
+
+        <!-- Layar Sukses Login -->
+        <div id="successCard" class="card success-card" style="display: none; padding: 20px;">
+          <div class="success-icon" style="width: 44px; height: 44px; margin: 0 auto 8px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+
+          <h2 style="font-size: 1.2rem;">Otentikasi 2FA Berhasil!</h2>
+          <p class="welcome-text">Sesi terotorisasi: <strong id="loggedInUser">demo_user</strong></p>
+
+          <div class="security-badge" style="margin-bottom: 14px; font-size: 0.75rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Groth16 BN254 Zero-Knowledge Proof Valid</span>
+          </div>
+
+          <div class="info-list">
+            <div class="info-item">
+              <span>Kunci Visual OTP:</span>
+              <strong id="verifyVisualKey" style="font-family: monospace; font-size: 0.7rem;">-</strong>
+            </div>
+            <div class="info-item">
+              <span>Latensi Verifikasi:</span>
+              <strong id="verifyTime" style="font-size: 0.8rem;">~ ms</strong>
+            </div>
+            <div class="info-item">
+              <span>Privasi Secret:</span>
+              <strong class="text-green" style="font-size: 0.8rem;">100% Client-Side Only</strong>
             </div>
           </div>
 
-          <button type="button" id="btnVerifyImageLogin" class="btn-primary" style="width: 100%; margin-top: 4px;">
-            Verifikasi Gambar & Masuk (ZK-Proof)
-          </button>
-        </div>
+          <details class="proof-receipt-details">
+            <summary class="proof-receipt-summary">Lihat Rincian Cryptographic Proof</summary>
+            <div class="receipt-body">
+              <pre id="loginProofReceipt" class="receipt-pre"></pre>
+            </div>
+          </details>
 
-        <div id="loginStatus" class="status-box" style="display: none; text-align: left;"></div>
+          <div style="margin-top: 12px; text-align: left;">
+            <button type="button" id="btnTestVaultAccess" class="btn-secondary" style="width: 100%; font-size: 0.8rem; padding: 7px 10px;">
+              Uji Otorisasi Vault (/api/user/vault)
+            </button>
+            <div id="vaultResponseBox" style="display: none; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.72rem; color: #a1a1aa; white-space: pre-wrap;"></div>
+          </div>
+
+          <div style="margin-top: 14px;">
+            <button id="btnLogout" class="btn-secondary" style="width: 100%;">Keluar (Logout)</button>
+          </div>
+        </div>
       </div>
 
-      <!-- Tampilan 2: Generator Gambar Kunci 2FA -->
-      <div id="viewGenerator" class="form-content" style="display: none; flex-direction: column; align-items: center; gap: 16px;">
-        <div class="form-step-badge">Kunci Visual Dinamis (Siklus Rotasi 45 Detik)</div>
-
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 320px;">
-          <div style="position: relative; width: 200px; height: 200px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
-            <canvas id="totpCanvas" width="200" height="200" style="display: block; width: 100%; height: 100%;"></canvas>
-          </div>
-
-          <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #a1a1aa;">
-            Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">45s</strong>
-          </div>
-
-          <div class="form-group" style="width: 100%;">
-            <label for="totpMasterSecret">Master Secret</label>
-            <input type="password" id="totpMasterSecret" placeholder="Kunci rahasia" value="12345678901234567890">
-          </div>
-
-          <!-- Opsi Aksi Hanya Gambar Saja -->
-          <div style="display: flex; gap: 8px; width: 100%;">
-            <button type="button" id="btnDownloadImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
-              Unduh Gambar (PNG)
-            </button>
-            <button type="button" id="btnCopyImage" class="btn-secondary" style="flex: 1; font-size: 0.8rem;">
-              Salin Gambar
+      <!-- Kolom Kanan: Developer Console & Quickstart Docs -->
+      <div>
+        <div class="dev-console-card">
+          <div class="dev-console-header">
+            <div style="display: flex; gap: 8px;">
+              <button id="tabBtnLogs" class="tab-btn active" style="font-size: 0.75rem; padding: 4px 10px;">Telemetry Logs</button>
+              <button id="tabBtnSnippets" class="tab-btn" style="font-size: 0.75rem; padding: 4px 10px;">SDK Quickstart</button>
+            </div>
+            <button id="btnClearLogs" style="background: none; border: none; color: #71717a; font-size: 0.72rem; cursor: pointer;">
+              Bersihkan
             </button>
           </div>
 
-          <button type="button" id="btnUseImageForLogin" class="btn-primary" style="width: 100%; margin-top: 6px;">
-            Gunakan Gambar untuk Login →
-          </button>
-        </div>
+          <!-- View 1: Telemetry Logs Console -->
+          <div id="viewDevLogs" class="dev-console-body">
+            <div id="devLogConsole"></div>
+          </div>
 
-        <div id="genStatus" class="status-box" style="display: none; width: 100%; text-align: left;"></div>
+          <!-- View 2: SDK Quickstart Code Snippets -->
+          <div id="viewDevSnippets" class="dev-console-body" style="display: none; padding: 12px;">
+            <div style="font-weight: 600; color: #ffffff; margin-bottom: 6px;">1. Instalasi SDK Klien:</div>
+            <pre class="code-snippet-box">npm install zk-canvas-sdk</pre>
+
+            <div style="font-weight: 600; color: #ffffff; margin-top: 12px; margin-bottom: 6px;">2. Inisialisasi Canvas (Klien):</div>
+            <pre class="code-snippet-box">import { ZkCanvasSDK } from 'zk-canvas-sdk';
+
+const sdk = new ZkCanvasSDK({
+  canvas: document.getElementById('totpCanvas'),
+  secret: 'USER_MASTER_SECRET',
+  rotationIntervalMs: 45000 // Siklus 45 detik
+});
+
+// Dengarkan event waktu & perubahan matriks
+sdk.on('tick', ({ remainingMs }) => console.log(remainingMs));
+sdk.start();
+
+// Hitung bukti Groth16 di background Worker
+const { proof, publicSignals } = await sdk.generateProof(sessionNonce);</pre>
+
+            <div style="font-weight: 600; color: #ffffff; margin-top: 12px; margin-bottom: 6px;">3. Verifikasi Server (Express REST API):</div>
+            <pre class="code-snippet-box">import { verifyVisualTotpProof } from './zkVerifier.js';
+
+app.post('/api/auth/verify-2fa', async (req, res) => {
+  const { proof, publicSignals, clientTimeWindow, sessionNonce } = req.body;
+  const result = await verifyVisualTotpProof({
+    proof,
+    publicSignals,
+    clientTimeWindow,
+    sessionNonce,
+    intervalSec: 45
+  });
+  if (!result.valid) return res.status(401).json({ error: result.error });
+  return res.json({ success: true, token: createToken() });
+});</pre>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Layar Sukses Login -->
-    <div id="successCard" class="card success-card" style="display: none;">
-      <div class="success-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-          <polyline points="22 4 12 14.01 9 11.01"></polyline>
-        </svg>
-      </div>
-
-      <h2>Otentikasi 2FA Berhasil!</h2>
-      <p class="welcome-text">Selamat datang, <strong id="loggedInUser">demo_user</strong></p>
-
-      <div class="security-badge">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-        </svg>
-        <span>Terotentikasi via Zero-Knowledge Proof (Groth16 BN254)</span>
-      </div>
-
-      <div class="info-list">
-        <div class="info-item">
-          <span>Kunci Visual OTP</span>
-          <strong id="verifyVisualKey" style="font-family: monospace; font-size: 0.72rem;">-</strong>
-        </div>
-        <div class="info-item">
-          <span>Durasi Proof + Verifikasi</span>
-          <strong id="verifyTime">~ ms</strong>
-        </div>
-        <div class="info-item">
-          <span>Privasi Master Secret</span>
-          <strong class="text-green">100% Tidak Pernah Dikirim ke Server</strong>
-        </div>
-      </div>
-
-      <details class="proof-receipt-details">
-        <summary class="proof-receipt-summary">Lihat Rincian Bukti Kriptografi (Proof Receipt)</summary>
-        <div class="receipt-body">
-          <pre id="loginProofReceipt" class="receipt-pre"></pre>
-        </div>
-      </details>
-
-      <div style="margin-top: 12px; text-align: left;">
-        <button type="button" id="btnTestVaultAccess" class="btn-secondary" style="width: 100%; font-size: 0.82rem; padding: 8px 12px;">
-          Uji Otorisasi Vault (/api/user/vault via Bearer Token)
-        </button>
-        <div id="vaultResponseBox" style="display: none; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.73rem; color: #a1a1aa; white-space: pre-wrap;"></div>
-      </div>
-
-      <div style="display: flex; gap: 10px; margin-top: 16px;">
-        <button id="btnLogout" class="btn-secondary" style="flex: 1;">Keluar (Logout)</button>
-      </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="simple-footer">
-      Zero-Knowledge Visual TOTP 2FA • Circom 2.0 • SnarkJS • Web Worker • BN254 Curve
+    <!-- Footer Developer -->
+    <footer class="simple-footer" style="margin-top: 8px;">
+      Zero-Knowledge Visual TOTP 2FA • Circom 2.0 • SnarkJS Groth16 • Web Worker • BN254 Curve
     </footer>
   </div>
 

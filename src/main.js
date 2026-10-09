@@ -1,13 +1,37 @@
 import { ZkCanvasSDK } from '../sdk/esm/index.js';
 
 /**
- * Controller Antarmuka ZK-OTP Authenticator Demo
+ * Controller Antarmuka ZK-OTP Developer Playground
  * Skenario: Login -> Lupa Password -> Ambil Kunci Gambar (45s) -> Verifikasi Gambar untuk Login
+ * Dilengkapi dengan Live Telemetry Logs & SDK Integration Snippets
  */
 
 let sdkInstance = null;
 let currentSessionToken = null;
 let currentKeyImageData = null;
+
+// Telemetry Logger untuk Developer Console
+function logDev(tag, msg, extra = '') {
+  const consoleEl = document.getElementById('devLogConsole');
+  if (!consoleEl) return;
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  
+  const tagClasses = {
+    SDK: 'log-tag-sdk',
+    PROVER: 'log-tag-prover',
+    SERVER: 'log-tag-server',
+    EVENT: 'log-tag-warn',
+    ERROR: 'log-tag-err'
+  };
+  const tagClass = tagClasses[tag] || 'log-tag-sdk';
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">[${timeStr}]</span> <span class="${tagClass}">[${tag}]</span> ${msg} ${extra ? `<span style="color:#71717a;">${extra}</span>` : ''}`;
+  consoleEl.appendChild(entry);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
 
 // Indikator Status Backend
 async function checkBackendConnection() {
@@ -20,14 +44,16 @@ async function checkBackendConnection() {
     if (res.ok) {
       dot.style.background = '#22c55e';
       text.style.color = '#ffffff';
-      text.textContent = 'Server Online (Express REST API)';
+      text.textContent = 'Server Online';
+      logDev('SERVER', 'REST API terhubung di :3000', '(Health 200 OK)');
       return true;
     }
   } catch {}
 
   dot.style.background = '#eab308';
   text.style.color = '#a1a1aa';
-  text.textContent = 'Mode Mandiri (WASM Client / Standalone)';
+  text.textContent = 'Mode Mandiri';
+  logDev('SERVER', 'Menjalankan mode mandiri WASM', '(GitHub Pages / Static)');
   return false;
 }
 
@@ -67,19 +93,26 @@ function initSdk() {
     workerScriptUrl: './sdk/browser/workerScript.js'
   });
 
-  sdkInstance.on('tick', ({ remainingMs }) => {
+  logDev('SDK', 'ZkCanvasSDK diinisialisasi', `(Interval: 45s, Canvas: 8x8)`);
+
+  sdkInstance.on('tick', ({ remainingMs, currentWindow }) => {
     const sec = Math.ceil(remainingMs / 1000);
     if (secondsLeftEl) secondsLeftEl.textContent = `${sec}s`;
+    if (sec % 15 === 0) {
+      logDev('SDK', `Tick: sisa ${sec}s pada window #${currentWindow}`);
+    }
   });
 
-  sdkInstance.on('patternChange', ({ window: win }) => {
+  sdkInstance.on('patternChange', ({ window: win, matrix }) => {
     if (windowLabel) windowLabel.textContent = win;
+    logDev('EVENT', `Pergantian Jendela Waktu aktif -> #${win}`, `(Matrix: 64 sel warna dirender)`);
   });
 
   sdkInstance.start();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  logDev('SDK', 'Memulai ZK-OTP Developer Playground...');
   checkBackendConnection();
   initSdk();
 
@@ -105,7 +138,37 @@ document.addEventListener('DOMContentLoaded', () => {
   const secretInput = document.getElementById('totpMasterSecret');
   const userInput = document.getElementById('loginUsername');
 
-  // Tab switching
+  // Dev Console Tabs
+  const tabBtnLogs = document.getElementById('tabBtnLogs');
+  const tabBtnSnippets = document.getElementById('tabBtnSnippets');
+  const viewDevLogs = document.getElementById('viewDevLogs');
+  const viewDevSnippets = document.getElementById('viewDevSnippets');
+  const btnClearLogs = document.getElementById('btnClearLogs');
+
+  if (tabBtnLogs && tabBtnSnippets) {
+    tabBtnLogs.addEventListener('click', () => {
+      tabBtnLogs.classList.add('active');
+      tabBtnSnippets.classList.remove('active');
+      viewDevLogs.style.display = 'block';
+      viewDevSnippets.style.display = 'none';
+    });
+    tabBtnSnippets.addEventListener('click', () => {
+      tabBtnSnippets.classList.add('active');
+      tabBtnLogs.classList.remove('active');
+      viewDevSnippets.style.display = 'block';
+      viewDevLogs.style.display = 'none';
+    });
+  }
+
+  if (btnClearLogs) {
+    btnClearLogs.addEventListener('click', () => {
+      const consoleEl = document.getElementById('devLogConsole');
+      if (consoleEl) consoleEl.innerHTML = '';
+      logDev('SDK', 'Console dibersihkan');
+    });
+  }
+
+  // Tab switching sandbox
   function switchTab(target) {
     if (target === 'login') {
       tabBtnLogin.classList.add('active');
@@ -128,7 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // 1. Tombol Lupa Password -> buka panel pemulihan gambar
   if (btnForgotPwd && recoveryPanel) {
     btnForgotPwd.addEventListener('click', () => {
-      recoveryPanel.style.display = recoveryPanel.style.display === 'none' ? 'flex' : 'none';
+      const isHidden = recoveryPanel.style.display === 'none';
+      recoveryPanel.style.display = isHidden ? 'flex' : 'none';
+      if (isHidden) {
+        logDev('EVENT', 'User membuka opsi pemulihan 2FA Visual Image');
+      }
     });
   }
 
@@ -136,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnGoToGenerator) {
     btnGoToGenerator.addEventListener('click', () => {
       switchTab('generator');
+      logDev('EVENT', 'Navigasi ke 2FA Visual Keyfile Generator');
     });
   }
 
@@ -146,7 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
       imgPreview.src = dataUrl;
       imagePreviewContainer.style.display = 'flex';
     }
-    showStatus('loginStatus', 'info', 'Gambar kunci 2FA siap diverifikasi (rotasi 45s).');
+    showStatus('loginStatus', 'info', 'Gambar kunci 2FA terpasang (jendela aktif 45s).');
+    logDev('SDK', 'Gambar kunci visual dimuat ke form autentikasi');
   }
 
   // 2. Generator: Unduh Gambar PNG
@@ -160,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
       a.download = `zk-otp-key-${Date.now()}.png`;
       a.click();
       showStatus('genStatus', 'info', 'Gambar kunci 2FA berhasil diunduh.');
+      logDev('SDK', 'Mengunduh berkas gambar visual keyfile (.png)');
     });
   }
 
@@ -176,13 +246,14 @@ document.addEventListener('DOMContentLoaded', () => {
               new ClipboardItem({ 'image/png': blob })
             ]);
             showStatus('genStatus', 'info', 'Gambar berhasil disalin ke clipboard!');
+            logDev('SDK', 'Gambar disalin ke system clipboard');
           } catch {
-            // Fallback: simpan di memori lokal sesi
             setKeyImage(canvas.toDataURL('image/png'));
             showStatus('genStatus', 'info', 'Gambar disalin ke memori sesi.');
+            logDev('SDK', 'Gambar disimpan ke session storage buffer');
           }
         });
-      } catch (e) {
+      } catch {
         setKeyImage(canvas.toDataURL('image/png'));
         showStatus('genStatus', 'info', 'Gambar disalin ke memori sesi.');
       }
@@ -198,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       recoveryPanel.style.display = 'flex';
       switchTab('login');
+      logDev('EVENT', 'Membawa gambar kunci ke form login');
     });
   }
 
@@ -213,16 +285,17 @@ document.addEventListener('DOMContentLoaded', () => {
               const reader = new FileReader();
               reader.onload = (e) => setKeyImage(e.target.result);
               reader.readAsDataURL(blob);
+              logDev('SDK', 'Membaca gambar dari clipboard API');
               return;
             }
           }
         }
         showStatus('loginStatus', 'error', 'Tidak ada data gambar di clipboard.');
       } catch {
-        // Jika pembatasan browser clipboard API, gunakan gambar dari canvas aktif jika ada
         const canvas = document.getElementById('totpCanvas');
         if (canvas) {
           setKeyImage(canvas.toDataURL('image/png'));
+          logDev('SDK', 'Mengambil gambar langsung dari canvas aktif');
         } else {
           showStatus('loginStatus', 'error', 'Izin clipboard ditolak. Silakan gunakan tombol Unggah File PNG.');
         }
@@ -240,6 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         reader.onload = (event) => setKeyImage(event.target.result);
         reader.readAsDataURL(blob);
+        logDev('SDK', 'Event Paste (Ctrl+V) gambar kunci ditangkap');
         break;
       }
     }
@@ -253,14 +327,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const reader = new FileReader();
       reader.onload = (event) => setKeyImage(event.target.result);
       reader.readAsDataURL(file);
+      logDev('SDK', `Berkas diunggah: ${file.name} (${file.size} bytes)`);
     });
   }
 
   // Login Normal
   if (btnLoginNormal) {
     btnLoginNormal.addEventListener('click', () => {
-      showStatus('loginStatus', 'error', 'Login password biasa terkunci. Gunakan opsi "Lupa Password? Masuk via Kunci Gambar 2FA".');
+      showStatus('loginStatus', 'error', 'Login password biasa terkunci. Silakan gunakan opsi "Lupa Password? Masuk via Kunci Gambar 2FA".');
       if (recoveryPanel) recoveryPanel.style.display = 'flex';
+      logDev('EVENT', 'User menekan login biasa -> dialihkan ke pemulihan kunci 2FA');
     });
   }
 
@@ -274,7 +350,8 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       btnVerifyImageLogin.disabled = true;
-      showStatus('loginStatus', 'info', 'Menyiapkan challenge nonce (siklus 45 detik)...');
+      showStatus('loginStatus', 'info', 'Menyiapkan challenge nonce...');
+      logDev('PROVER', `Memulai pipeline verifikasi 2FA untuk "${username}"`);
 
       try {
         let serverNonce = null;
@@ -291,6 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chalData.success) {
               serverNonce = chalData.sessionNonce;
               isOnline = true;
+              logDev('SERVER', `Challenge nonce diterima dari server: ${serverNonce.slice(0, 16)}...`);
             }
           }
         } catch {}
@@ -299,18 +377,23 @@ document.addEventListener('DOMContentLoaded', () => {
           const randBytes = new Uint8Array(16);
           crypto.getRandomValues(randBytes);
           serverNonce = '0x' + Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+          logDev('PROVER', `Challenge nonce lokal dibuat: ${serverNonce.slice(0, 16)}...`);
         }
 
         showStatus('loginStatus', 'info', 'Menghitung Groth16 Proof di Web Worker...');
+        logDev('PROVER', 'Mendelegasikan komputasi Groth16 ke SnarkJS Web Worker...');
 
         // Menghasilkan ZK Proof melalui antarmuka tingkat tinggi SDK
         const proofResult = await sdkInstance.generateProof(serverNonce);
+        logDev('PROVER', `Proof selesai dihitung (${proofResult.durationMs}ms)`, `Signals count: ${proofResult.publicSignals.length}`);
 
         let verifyDuration = 0;
         let visualKey = proofResult.publicSignals[0];
 
         if (isOnline) {
           showStatus('loginStatus', 'info', `Proof selesai (${proofResult.durationMs}ms). Memvalidasi ke server...`);
+          logDev('SERVER', 'Mengirim bukti kriptografi ke /api/auth/verify-2fa...');
+
           const verifyRes = await fetch('/api/auth/verify-2fa', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -325,11 +408,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
           const verifyData = await verifyRes.json();
           if (!verifyRes.ok || !verifyData.success) {
+            logDev('ERROR', `Verifikasi server gagal: ${verifyData.error || 'Ditolak'}`);
             throw new Error(verifyData.error || 'Verifikasi server gagal.');
           }
           currentSessionToken = verifyData.sessionToken;
           verifyDuration = verifyData.verificationDurationMs || 0;
           if (verifyData.visualKey) visualKey = verifyData.visualKey;
+          logDev('SERVER', `Proof valid! Server memverifikasi dalam ${verifyDuration}ms`, `(Token sesi diterbitkan)`);
+        } else {
+          logDev('SERVER', 'Proof terverifikasi secara matematis via Web Worker (Standalone mode)');
         }
 
         // Tampilkan layar sukses
@@ -356,8 +443,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         hideStatus('loginStatus');
+        logDev('SERVER', `Otentikasi berhasil! Sesi aktif untuk ${username}`);
       } catch (err) {
         showStatus('loginStatus', 'error', 'Otentikasi gambar gagal: ' + err.message);
+        logDev('ERROR', `Kegagalan: ${err.message}`);
       } finally {
         btnVerifyImageLogin.disabled = false;
       }
@@ -366,7 +455,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Master secret update
   if (secretInput) {
-    secretInput.addEventListener('change', () => initSdk());
+    secretInput.addEventListener('change', () => {
+      initSdk();
+      logDev('SDK', 'Master Secret pengguna diperbarui');
+    });
   }
 
   // Tombol Uji Otorisasi Vault
@@ -385,9 +477,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         vaultBox.style.display = 'block';
         vaultBox.textContent = JSON.stringify(data, null, 2);
+        logDev('SERVER', 'Akses vault /api/user/vault berhasil');
       } catch (err) {
         vaultBox.style.display = 'block';
         vaultBox.textContent = 'Error: ' + err.message;
+        logDev('ERROR', 'Akses vault gagal: ' + err.message);
       }
     });
   }
@@ -402,6 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
       successCard.style.display = 'none';
       authCard.style.display = 'block';
       if (vaultBox) vaultBox.style.display = 'none';
+      logDev('EVENT', 'User logout dari sesi');
     });
   }
 });
