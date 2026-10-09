@@ -31,7 +31,7 @@ export class ZkCanvasSDK {
 
     this.secret = config.secret;
     this.canvas = config.canvas || null;
-    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 60000);
+    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 45000);
     this.assetBaseUrl = (config.assetBaseUrl || '/zk/').replace(/\/?$/, '/');
 
     // Asset URLs

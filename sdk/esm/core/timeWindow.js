@@ -6,10 +6,10 @@
 /**
  * Menghitung indeks jendela waktu aktif berdasarkan timestamp.
  * @param {number} timestampMs - Waktu dalam milidetik (misal Date.now())
- * @param {number} [intervalMs=60000] - Durasi jendela dalam milidetik (default: 60s)
+ * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik (default: 45s)
  * @returns {number} Indeks jendela waktu bilangan bulat
  */
-export function calculateTimeWindow(timestampMs, intervalMs = 60000) {
+export function calculateTimeWindow(timestampMs, intervalMs = 45000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -19,10 +19,10 @@ export function calculateTimeWindow(timestampMs, intervalMs = 60000) {
 /**
  * Menghitung sisa milidetik sebelum jendela waktu saat ini berganti.
  * @param {number} timestampMs - Waktu dalam milidetik
- * @param {number} [intervalMs=60000] - Durasi jendela dalam milidetik
+ * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik
  * @returns {number} Sisa waktu dalam milidetik (1 hingga intervalMs)
  */
-export function calculateRemainingMs(timestampMs, intervalMs = 60000) {
+export function calculateRemainingMs(timestampMs, intervalMs = 45000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -33,10 +33,10 @@ export function calculateRemainingMs(timestampMs, intervalMs = 60000) {
 /**
  * Menghitung timestamp milidetik kapan jendela berikutnya dimulai.
  * @param {number} timestampMs
- * @param {number} [intervalMs=60000]
+ * @param {number} [intervalMs=45000]
  * @returns {number}
  */
-export function calculateNextWindowTimestamp(timestampMs, intervalMs = 60000) {
+export function calculateNextWindowTimestamp(timestampMs, intervalMs = 45000) {
   const currentWindow = calculateTimeWindow(timestampMs, intervalMs);
   return (currentWindow + 1) * intervalMs;
 }

@@ -13,10 +13,10 @@
 /**
  * Menghitung indeks jendela waktu aktif berdasarkan timestamp.
  * @param {number} timestampMs - Waktu dalam milidetik (misal Date.now())
- * @param {number} [intervalMs=60000] - Durasi jendela dalam milidetik (default: 60s)
+ * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik (default: 45s)
  * @returns {number} Indeks jendela waktu bilangan bulat
  */
-function calculateTimeWindow(timestampMs, intervalMs = 60000) {
+function calculateTimeWindow(timestampMs, intervalMs = 45000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -26,10 +26,10 @@ function calculateTimeWindow(timestampMs, intervalMs = 60000) {
 /**
  * Menghitung sisa milidetik sebelum jendela waktu saat ini berganti.
  * @param {number} timestampMs - Waktu dalam milidetik
- * @param {number} [intervalMs=60000] - Durasi jendela dalam milidetik
+ * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik
  * @returns {number} Sisa waktu dalam milidetik (1 hingga intervalMs)
  */
-function calculateRemainingMs(timestampMs, intervalMs = 60000) {
+function calculateRemainingMs(timestampMs, intervalMs = 45000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -40,10 +40,10 @@ function calculateRemainingMs(timestampMs, intervalMs = 60000) {
 /**
  * Menghitung timestamp milidetik kapan jendela berikutnya dimulai.
  * @param {number} timestampMs
- * @param {number} [intervalMs=60000]
+ * @param {number} [intervalMs=45000]
  * @returns {number}
  */
-function calculateNextWindowTimestamp(timestampMs, intervalMs = 60000) {
+function calculateNextWindowTimestamp(timestampMs, intervalMs = 45000) {
   const currentWindow = calculateTimeWindow(timestampMs, intervalMs);
   return (currentWindow + 1) * intervalMs;
 }
@@ -595,7 +595,7 @@ class ZkCanvasSDK {
 
     this.secret = config.secret;
     this.canvas = config.canvas || null;
-    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 60000);
+    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 45000);
     this.assetBaseUrl = (config.assetBaseUrl || '/zk/').replace(/\/?$/, '/');
 
     // Asset URLs
