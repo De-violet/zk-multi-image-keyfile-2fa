@@ -53,7 +53,7 @@
         <div id="authCard" class="card" style="padding: 20px;">
           <div class="tabs" style="margin-bottom: 16px;">
             <button id="tabBtnLogin" class="tab-btn active">Masuk (Login)</button>
-            <button id="tabBtnGenerator" class="tab-btn">Pembuat Kunci 2FA (45s)</button>
+            <button id="tabBtnGenerator" class="tab-btn">Pembuat Kunci 2FA (35s)</button>
           </div>
 
           <!-- Tampilan 1: Form Login Awal -->
@@ -83,7 +83,7 @@
             <!-- Panel Pemulihan via Gambar -->
             <div id="recoveryPanel" style="display: none; flex-direction: column; gap: 10px; margin-top: 6px; padding-top: 12px; border-top: 1px dashed #27272a;">
               <div style="font-size: 0.78rem; color: #a1a1aa;">
-                Ambil gambar kunci visual (rotasi 45 detik), lalu tempel atau unggah di bawah ini:
+                Ambil gambar kunci visual (rotasi 35 detik), lalu tempel atau unggah di bawah ini:
               </div>
 
               <button type="button" id="btnGoToGenerator" class="btn-secondary" style="width: 100%; font-size: 0.8rem;">
@@ -105,7 +105,7 @@
                 <img id="imgPreview" alt="Pratinjau Kunci" style="width: 56px; height: 56px; border-radius: 4px; border: 1px solid #3f3f46; image-rendering: pixelated; object-fit: contain;">
                 <div style="font-size: 0.75rem; color: #a1a1aa;">
                   <strong style="color: #22c55e;">✓ Gambar Kunci Terpasang</strong><br>
-                  Siap di-prove di Web Worker (45 detik)
+                  Siap di-prove di Web Worker (35 detik)
                 </div>
               </div>
 
@@ -119,7 +119,7 @@
 
           <!-- Tampilan 2: Generator Gambar Kunci 2FA -->
           <div id="viewGenerator" class="form-content" style="display: none; flex-direction: column; align-items: center; gap: 14px;">
-            <div class="form-step-badge">Faktor 2: Kunci Visual Dinamis (Siklus 45 Detik)</div>
+            <div class="form-step-badge">Faktor 2: Kunci Visual Dinamis (Siklus 35 Detik)</div>
 
             <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 300px;">
               <div style="position: relative; width: 180px; height: 180px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
@@ -127,7 +127,7 @@
               </div>
 
               <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: #a1a1aa;">
-                Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">45s</strong>
+                Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">35s</strong>
               </div>
 
               <div class="form-group" style="width: 100%;">
@@ -237,7 +237,7 @@
 const sdk = new ZkCanvasSDK({
   canvas: document.getElementById('totpCanvas'),
   secret: 'USER_MASTER_SECRET',
-  rotationIntervalMs: 45000 // Siklus 45 detik
+  rotationIntervalMs: 35000 // Siklus 35 detik
 });
 
 // Dengarkan event waktu & perubahan matriks
@@ -257,7 +257,7 @@ app.post('/api/auth/verify-2fa', async (req, res) => {
     publicSignals,
     clientTimeWindow,
     sessionNonce,
-    intervalSec: 45
+    intervalSec: 35
   });
   if (!result.valid) return res.status(401).json({ error: result.error });
   return res.json({ success: true, token: createToken() });

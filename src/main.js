@@ -84,16 +84,16 @@ function initSdk() {
 
   const secret = secretInput ? secretInput.value.trim() : '12345678901234567890';
 
-  // Siklus rotasi 45 detik (45000 ms)
+  // Siklus rotasi 35 detik (35000 ms)
   sdkInstance = new ZkCanvasSDK({
     secret,
     canvas,
-    rotationIntervalMs: 45000,
+    rotationIntervalMs: 35000,
     assetBaseUrl: './public/zk/',
     workerScriptUrl: './sdk/browser/workerScript.js'
   });
 
-  logDev('SDK', 'ZkCanvasSDK diinisialisasi', `(Interval: 45s, Canvas: 8x8)`);
+  logDev('SDK', 'ZkCanvasSDK diinisialisasi', `(Interval: 35s, Canvas: 8x8)`);
 
   sdkInstance.on('tick', ({ remainingMs, currentWindow }) => {
     const sec = Math.ceil(remainingMs / 1000);
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       imgPreview.src = dataUrl;
       imagePreviewContainer.style.display = 'flex';
     }
-    showStatus('loginStatus', 'info', 'Gambar kunci 2FA terpasang (jendela aktif 45s).');
+    showStatus('loginStatus', 'info', 'Gambar kunci 2FA terpasang (jendela aktif 35s).');
     logDev('SDK', 'Gambar kunci visual dimuat ke form autentikasi');
   }
 
@@ -435,7 +435,7 @@ document.addEventListener('DOMContentLoaded', () => {
             protocol: proofResult.proof.protocol,
             curve: proofResult.proof.curve,
             challenge: serverNonce,
-            timeWindowCycle: '45 seconds',
+            timeWindowCycle: '35 seconds',
             publicSignals: proofResult.publicSignals,
             pi_a: proofResult.proof.pi_a,
             mode: isOnline ? 'Server-Verified (Express REST)' : 'Client-Side Standalone (SnarkJS WASM)'

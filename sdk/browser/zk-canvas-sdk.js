@@ -13,10 +13,10 @@
 /**
  * Menghitung indeks jendela waktu aktif berdasarkan timestamp.
  * @param {number} timestampMs - Waktu dalam milidetik (misal Date.now())
- * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik (default: 45s)
+ * @param {number} [intervalMs=35000] - Durasi jendela dalam milidetik (default: 35s)
  * @returns {number} Indeks jendela waktu bilangan bulat
  */
-function calculateTimeWindow(timestampMs, intervalMs = 45000) {
+function calculateTimeWindow(timestampMs, intervalMs = 35000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -26,10 +26,10 @@ function calculateTimeWindow(timestampMs, intervalMs = 45000) {
 /**
  * Menghitung sisa milidetik sebelum jendela waktu saat ini berganti.
  * @param {number} timestampMs - Waktu dalam milidetik
- * @param {number} [intervalMs=45000] - Durasi jendela dalam milidetik
+ * @param {number} [intervalMs=35000] - Durasi jendela dalam milidetik
  * @returns {number} Sisa waktu dalam milidetik (1 hingga intervalMs)
  */
-function calculateRemainingMs(timestampMs, intervalMs = 45000) {
+function calculateRemainingMs(timestampMs, intervalMs = 35000) {
   if (intervalMs <= 0) {
     throw new Error('intervalMs harus berupa angka positif lebih dari 0.');
   }
@@ -40,10 +40,10 @@ function calculateRemainingMs(timestampMs, intervalMs = 45000) {
 /**
  * Menghitung timestamp milidetik kapan jendela berikutnya dimulai.
  * @param {number} timestampMs
- * @param {number} [intervalMs=45000]
+ * @param {number} [intervalMs=35000]
  * @returns {number}
  */
-function calculateNextWindowTimestamp(timestampMs, intervalMs = 45000) {
+function calculateNextWindowTimestamp(timestampMs, intervalMs = 35000) {
   const currentWindow = calculateTimeWindow(timestampMs, intervalMs);
   return (currentWindow + 1) * intervalMs;
 }
@@ -80,12 +80,20 @@ function normalizeToBytes32(input) {
     } else if (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length <= 64) {
       hex = trimmed;
     } else {
-      // String teks UTF-8 sembarang: hashing sederhana / direct bytes
+      // String teks UTF-8 sembarang: hashing sponge dengan efek avalanche 32-byte penuh
       const encoder = new TextEncoder();
       const raw = encoder.encode(trimmed);
       const buf = new Uint8Array(32);
+      let h = 0x811c9dc5;
       for (let i = 0; i < raw.length; i++) {
-        buf[i % 32] ^= raw[i];
+        h = Math.imul(h ^ raw[i], 0x01000193);
+        h = (h << 13) | (h >>> 19);
+      }
+      for (let i = 0; i < 32; i++) {
+        h = Math.imul(h ^ (i * 31 + 7), 0x5bd1e995);
+        h ^= h >>> 13;
+        h = Math.imul(h, 0x1b873593);
+        buf[i] = ((h >>> ((i % 4) * 8)) ^ h) & 0xff;
       }
       return buf;
     }
@@ -595,7 +603,7 @@ class ZkCanvasSDK {
 
     this.secret = config.secret;
     this.canvas = config.canvas || null;
-    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 45000);
+    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 35000);
     this.assetBaseUrl = (config.assetBaseUrl || '/zk/').replace(/\/?$/, '/');
 
     // Resolve URL relatif menjadi absolut agar Web Worker tidak salah resolve
