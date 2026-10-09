@@ -3,132 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
-  <title>ZK 2FA — Zero-Knowledge Multi-Image Keyfile</title>
-  
-  <!-- Font Modern & Ringan -->
+  <title>ZK-OTP | Zero-Knowledge Visual TOTP 2FA</title>
+  <meta name="description" content="Zero-Knowledge Visual TOTP 2FA dengan Circom, SnarkJS, Groth16, Poseidon, dan Web Worker.">
+  <link rel="stylesheet" href="./src/styles/main.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="./src/styles/main.css?v=mono2">
-  
-  <style>
-    /* Monokrom Murni (Hitam • Putih • Abu-Abu) */
-    :root {
-      --bg-color: #09090b !important;
-      --card-bg: #121215 !important;
-      --border-color: #27272a !important;
-      --border-light: #3f3f46 !important;
-      --text-primary: #ffffff !important;
-      --text-muted: #a1a1aa !important;
-      --text-subtle: #71717a !important;
-      --primary-color: #ffffff !important;
-      --primary-hover: #e4e4e7 !important;
-      --primary-inverse: #09090b !important;
-      --slot-bg: #09090b !important;
-      --panel-bg: #18181b !important;
-      --purple-color: #ffffff !important;
-      --success-color: #ffffff !important;
-      --error-color: #a1a1aa !important;
-    }
-    body {
-      background-color: #09090b !important;
-      color: #ffffff !important;
-    }
-    .card {
-      background-color: #121215 !important;
-      border-color: #27272a !important;
-    }
-    .tab-btn.active, .tab-btn.btn-highlight.active {
-      background: #ffffff !important;
-      color: #09090b !important;
-      box-shadow: 0 2px 8px rgba(255, 255, 255, 0.15) !important;
-    }
-    .btn-primary {
-      background: #ffffff !important;
-      color: #09090b !important;
-    }
-    .btn-primary:hover:not(:disabled) {
-      background: #e4e4e7 !important;
-    }
-    .form-step-badge {
-      background: #18181b !important;
-      color: #ffffff !important;
-      border-color: #3f3f46 !important;
-    }
-    .logo-icon {
-      background: #18181b !important;
-      border-color: #3f3f46 !important;
-      color: #ffffff !important;
-    }
-    .lab-intro {
-      background: #18181b !important;
-      border-color: #27272a !important;
-    }
-    .lab-intro h3 {
-      color: #ffffff !important;
-    }
-    .step-badge {
-      background: #27272a !important;
-      color: #ffffff !important;
-      border-color: #3f3f46 !important;
-    }
-    .btn-small-primary {
-      background: #ffffff !important;
-      color: #09090b !important;
-    }
-    .slot-img-preview {
-      filter: grayscale(100%) !important;
-    }
-    .switch-toggle {
-      position: relative;
-      display: inline-block;
-      width: 38px;
-      height: 22px;
-      cursor: pointer;
-    }
-    .switch-toggle input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-    .toggle-slider {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #27272a;
-      border: 1px solid #3f3f46;
-      border-radius: 22px;
-      transition: 0.2s ease;
-    }
-    .toggle-slider:before {
-      position: absolute;
-      content: "";
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background-color: #a1a1aa;
-      border-radius: 50%;
-      transition: 0.2s ease;
-    }
-    .switch-toggle input:checked + .toggle-slider {
-      background-color: #ffffff;
-      border-color: #ffffff;
-    }
-    .switch-toggle input:checked + .toggle-slider:before {
-      transform: translateX(16px);
-      background-color: #09090b;
-    }
-  </style>
-  
-  <!-- Pustaka Kriptografi ZK Lokal -->
-  <script src="./public/vendor/poseidon.bundle.js"></script>
   <script src="./public/vendor/snarkjs.min.js"></script>
 </head>
 <body>
@@ -142,286 +23,68 @@
           <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
       </div>
-      <h1>Zero-Knowledge 2FA</h1>
-      <p class="subtitle">Alur Kriptografis: 1. Daftar Akun &rarr; 2. Login Akun &rarr; 3. Verifier</p>
+      <h1>ZK-OTP Authenticator</h1>
+      <p class="subtitle">Zero-Knowledge Visual TOTP 2FA • Matriks Dinamis 8x8 & Groth16 Prover</p>
+      
+      <div id="connectionBadge" style="display: inline-flex; align-items: center; gap: 6px; font-size: 0.73rem; padding: 4px 12px; border-radius: 12px; background: #18181b; border: 1px solid #27272a; margin-top: 8px;">
+        <span id="connectionDot" style="width: 8px; height: 8px; border-radius: 50%; background: #71717a;"></span>
+        <span id="connectionText" style="color: #a1a1aa;">Mengecek koneksi server...</span>
+      </div>
     </header>
 
     <!-- Kartu Utama -->
     <div id="authCard" class="card">
-      <!-- Tab Navigasi Urut Sesuai Permintaan -->
       <div class="tabs">
-        <button id="tabBtnRegister" class="tab-btn active">1. Daftar Akun</button>
-        <button id="tabBtnLogin" class="tab-btn">2. Login Akun</button>
-        <button id="tabBtnVerifier" class="tab-btn btn-highlight">3. Verifier</button>
+        <button id="tabBtnAuthenticator" class="tab-btn active">Visual TOTP</button>
+        <button id="tabBtnInspector" class="tab-btn">SDK Inspector</button>
       </div>
 
-      <!-- ================= 1. DAFTAR AKUN ================= -->
-      <form id="formRegister" class="form-content">
-        <div class="form-step-badge">Langkah 1 dari 3: Inisialisasi Akun & Komitmen Kriptografis</div>
-        
-        <div class="form-group">
-          <label for="regUsername">Username</label>
-          <input type="text" id="regUsername" placeholder="Pilih username Anda" required autocomplete="off">
-        </div>
+      <!-- Tab 1: Visual TOTP Authenticator -->
+      <div id="viewAuthenticator" class="form-content" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+        <div class="form-step-badge">Faktor Kedua Dinamis: Pola Visual Matriks & ZK-Proof</div>
 
-        <div class="form-group">
-          <label for="regPassword">Password</label>
-          <input type="password" id="regPassword" placeholder="Buat password Anda" required autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <label>Kunci 2FA (Pilih 3 File Foto Pribadi Anda)</label>
-          <p class="input-hint">Pilih 3 file foto bebas dari perangkat Anda. Foto tidak pernah dikirim ke server; hanya komitmen akar (Root Commitment) yang didaftarkan.</p>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="regSlot1">
-              <input type="file" id="regFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="regPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="regSlot2">
-              <input type="file" id="regFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="regPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="regSlot3">
-              <input type="file" id="regFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="regPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; max-width: 320px;">
+          <div style="position: relative; width: 200px; height: 200px; border: 2px solid #27272a; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+            <canvas id="totpCanvas" width="200" height="200" style="display: block; width: 100%; height: 100%;"></canvas>
           </div>
-        </div>
-
-        <div id="regStatus" class="status-box" style="display: none;"></div>
-
-        <button type="submit" id="btnRegSubmit" class="btn-primary">
-          <span class="btn-text">1. Daftarkan Akun & Kunci 2FA</span>
-          <div class="spinner" style="display: none;"></div>
-        </button>
-        <button type="button" id="btnDownloadBackupKey" class="btn-secondary" style="display: none; margin-top: 8px; width: 100%;">💾 Unduh Sertifikat Komitmen Cadangan (.key)</button>
-      </form>
-
-      <!-- ================= 2. LOGIN AKUN ================= -->
-      <form id="formLogin" class="form-content" style="display: none;">
-        <div class="form-step-badge">Langkah 2 dari 3: Masuk ke Akun Anda</div>
-
-        <div class="form-group">
-          <label for="loginUsername">Username</label>
-          <input type="text" id="loginUsername" placeholder="Masukkan username Anda" required autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <div class="label-with-action">
-            <label for="loginPassword">Password</label>
-            <button type="button" id="btnShowRecovery" class="btn-text-link">Lupa Password? Pulihkan &rarr;</button>
+          
+          <div id="totpTimerBox" style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #a1a1aa;">
+            Jendela: <span id="totpWindowLabel" style="color:#ffffff;">-</span> | Sisa: <strong id="totpSecondsLeft" style="color:#ffffff;">60s</strong>
           </div>
-          <input type="password" id="loginPassword" placeholder="Masukkan password Anda" required autocomplete="off">
-        </div>
 
-        <!-- Opsi Mode Login: Standar vs 2FA Zero-Knowledge -->
-        <div style="background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; margin-top: -4px;">
-          <div>
-            <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Proteksi 2FA Penuh (3 Foto Kunci)</div>
-            <div style="font-size: 0.73rem; color: var(--text-muted);">Aktifkan untuk membuktikan kepemilikan 3 foto via ZK-Proof saat login</div>
+          <div class="form-group" style="width: 100%;">
+            <label for="totpMasterSecret">Master Secret (Kunci Rahasia Klien)</label>
+            <input type="password" id="totpMasterSecret" placeholder="Masukkan master secret" value="12345678901234567890">
           </div>
-          <label class="switch-toggle" title="Aktifkan login dengan faktor kedua 3 Foto Kunci">
-            <input type="checkbox" id="checkEnable2FALogin">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
 
-        <!-- 3 Slot Foto Kunci untuk Login 2FA (Tampil jika switch aktif) -->
-        <div id="login2faSlotsContainer" class="form-group" style="display: none;">
-          <label>3 Foto Kunci 2FA Anda (Zero-Knowledge)</label>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="loginSlot1">
-              <input type="file" id="loginFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot2">
-              <input type="file" id="loginFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="loginSlot3">
-              <input type="file" id="loginFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="loginPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
+          <div class="form-group" style="width: 100%;">
+            <label for="totpUsername">Username Akun</label>
+            <input type="text" id="totpUsername" placeholder="Username untuk verifikasi" value="demo_user">
           </div>
-        </div>
 
-        <div id="loginStatus" class="status-box" style="display: none;"></div>
-
-        <button type="submit" id="btnLoginSubmit" class="btn-primary">
-          <span class="btn-text">2. Masuk ke Akun</span>
-          <div class="spinner" style="display: none;"></div>
-        </button>
-      </form>
-
-      <!-- ================= FORM PEMULIHAN AKUN (LUPA PASSWORD) ================= -->
-      <form id="formRecovery" class="form-content" style="display: none;">
-        <div class="form-step-badge">Pemulihan Akun via 2FA Zero-Knowledge</div>
-
-        <p class="input-hint" style="font-size: 0.8rem; color: #e4e4e7; background: #18181b; padding: 10px 12px; border-radius: 8px; border: 1px solid #3f3f46;">
-          <strong>Skenario Lupa Password:</strong> Buktikan identitas Anda dengan 3 foto kunci 2FA yang Anda miliki. Server akan memvalidasi bukti ZK tanpa pernah melihat foto Anda, lalu mengizinkan Anda membuat password baru.
-        </p>
-
-        <div class="form-group">
-          <label for="recoverUsername">Username Akun</label>
-          <input type="text" id="recoverUsername" placeholder="Masukkan username akun yang ingin dipulihkan" required autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <label for="recoverNewPassword">Password Baru</label>
-          <input type="password" id="recoverNewPassword" placeholder="Buat password baru" required autocomplete="off">
-        </div>
-
-        <div class="form-group">
-          <label>Kunci 2FA (3 Foto yang Digunakan Saat Pendaftaran)</label>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="recoverSlot1">
-              <input type="file" id="recoverFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="recoverPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="recoverSlot2">
-              <input type="file" id="recoverFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="recoverPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="recoverSlot3">
-              <input type="file" id="recoverFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="recoverPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div id="recoverStatus" class="status-box" style="display: none;"></div>
-
-        <div style="display: flex; gap: 8px;">
-          <button type="submit" id="btnRecoverSubmit" class="btn-primary" style="flex: 2;">
-            <span class="btn-text">Buktikan via ZKP & Reset Password</span>
-            <div class="spinner" style="display: none;"></div>
+          <button type="button" id="btnAuthVisualTotp" class="btn-primary" style="width: 100%;">
+            Verifikasi 2FA (SnarkJS Web Worker)
           </button>
-          <button type="button" id="btnCancelRecovery" class="btn-secondary" style="flex: 1; margin-top: 4px;">Batal</button>
+          
+          <div id="totpStatus" class="status-box" style="display: none; width: 100%; text-align: left;"></div>
         </div>
-      </form>
-
-      <!-- ================= 3. VERIFIER ================= -->
-      <div id="sectionVerifier" class="zk-lab-section" style="display: none;">
-        <div class="form-step-badge">Langkah 3 dari 3: Bedah & Uji Verifikasi Bukti Kriptografi</div>
-
-        <div class="lab-intro">
-          <h3>Pengujian Mandiri ZKP Verifier</h3>
-          <p>Uji secara langsung 3 pilar: perhitungan saksi (<strong>Witness</strong>), sintesis bukti (<strong>Proof</strong>), dan validasi pairing (<strong>Verifier</strong>) menggunakan foto pribadi Anda.</p>
-        </div>
-
-        <!-- 3 Foto untuk Verifier Test -->
-        <div class="lab-photo-picker">
-          <div class="lab-photo-title">Pilih 3 Foto Asli Anda untuk Uji Verifier:</div>
-          <div class="keyfile-grid">
-            <div class="keyfile-slot" id="labSlot1">
-              <input type="file" id="labFile1" accept="image/*" class="file-input">
-              <div class="slot-preview" id="labPreview1">
-                <span class="slot-number">1</span>
-                <span class="slot-text">Pilih Foto 1</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="labSlot2">
-              <input type="file" id="labFile2" accept="image/*" class="file-input">
-              <div class="slot-preview" id="labPreview2">
-                <span class="slot-number">2</span>
-                <span class="slot-text">Pilih Foto 2</span>
-              </div>
-            </div>
-            <div class="keyfile-slot" id="labSlot3">
-              <input type="file" id="labFile3" accept="image/*" class="file-input">
-              <div class="slot-preview" id="labPreview3">
-                <span class="slot-number">3</span>
-                <span class="slot-text">Pilih Foto 3</span>
-              </div>
-            </div>
-          </div>
-          <div id="labFileDetails" class="lab-file-details" style="display: none;"></div>
-        </div>
-
-        <div class="lab-grid">
-          <!-- Witness Card -->
-          <div class="lab-card">
-            <div class="lab-step-header">
-              <span class="step-badge">Tahap A</span>
-              <h4>Perhitungan Saksi (Witness)</h4>
-            </div>
-            <p class="lab-desc">Mereduksi byte foto menjadi elemen skalar medan kurva BN254 dan menghitung saksi Circom (~1.412 constraints) secara lokal.</p>
-            <div class="lab-actions">
-              <button type="button" id="btnLabGenWitness" class="btn-small-primary">Hitung Witness dari Foto</button>
-            </div>
-            <div id="labWitnessOutput" class="code-block">
-              <span class="code-placeholder">Pilih 3 foto di atas lalu klik "Hitung Witness dari Foto"</span>
-            </div>
-          </div>
-
-          <!-- Proof Card -->
-          <div class="lab-card">
-            <div class="lab-step-header">
-              <span class="step-badge">Tahap B</span>
-              <h4>Sintesis Bukti (Groth16 Proof)</h4>
-            </div>
-            <p class="lab-desc">Menghasilkan bukti matematika ringkas 256-byte (&pi;<sub>A</sub>, &pi;<sub>B</sub>, &pi;<sub>C</sub>). Foto asli tetap di perangkat Anda.</p>
-            <div class="lab-actions">
-              <button type="button" id="btnLabGenProof" class="btn-small-primary" disabled>Sintesis Proof</button>
-              <button type="button" id="btnLabTamperProof" class="btn-small-danger" disabled title="Uji ubah 1 angka pada bukti untuk membuktikan verifier menolak">🧪 Rusak Bukti (Tamper Proof)</button>
-              <button type="button" id="btnLabCopyProof" class="btn-small-secondary" disabled>Salin JSON</button>
-            </div>
-            <div id="labProofOutput" class="code-block">
-              <span class="code-placeholder">Menunggu sintesis bukti...</span>
-            </div>
-          </div>
-
-          <!-- Verifier Card -->
-          <div class="lab-card">
-            <div class="lab-step-header">
-              <span class="step-badge">Tahap C</span>
-              <h4>Verifikasi Bukti (Verifier)</h4>
-            </div>
-            <p class="lab-desc">Memvalidasi persamaan bilinear pairing <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) = e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code>.</p>
-            <div class="lab-actions">
-              <button type="button" id="btnLabRunVerify" class="btn-small-primary" disabled>Jalankan Verifier</button>
-            </div>
-            <div id="labVerifyOutput" class="verifier-result-box">
-              <span class="code-placeholder">Menunggu eksekusi verifier...</span>
-            </div>
-            <div class="lab-experiment-tip">
-              💡 <strong>Tips Eksperimen:</strong> Setelah verifikasi berhasil, coba klik tombol <strong>"🧪 Rusak Bukti"</strong> di Tahap B lalu klik kembali <strong>"Jalankan Verifier"</strong> untuk melihat bagaimana verifier menggagalkan data palsu!
-            </div>
-          </div>
-        </div>
-
       </div>
 
+      <!-- Tab 2: SDK Inspector -->
+      <div id="viewInspector" class="form-content" style="display: none; flex-direction: column; gap: 12px;">
+        <div class="form-step-badge">State & Binary Inspector: ZK Canvas SDK</div>
+        <p class="input-hint">Informasi internal state SDK: ekstraksi nilai 4-bit per sel dari bit-packing 2x8-bit (16-bit words) yang dipetakan ke 16 palet warna baku.</p>
+        
+        <div style="background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.75rem; color: #a1a1aa;">
+          <div>SDK Status: <strong id="inspectorStatus" style="color:#22c55e;">RUNNING</strong></div>
+          <div>Active Window: <strong id="inspectorWindow" style="color:#ffffff;">-</strong></div>
+          <div style="margin-top: 8px;">64 Cell Indices:</div>
+          <div id="inspectorMatrix" style="word-break: break-all; margin-top: 4px; color:#e4e4e7;">-</div>
+        </div>
+      </div>
     </div>
 
-    <!-- ================= LAYAR SUKSES LOGIN ================= -->
+    <!-- Layar Sukses Login -->
     <div id="successCard" class="card success-card" style="display: none;">
       <div class="success-icon">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -430,51 +93,56 @@
         </svg>
       </div>
 
-      <h2>Login Berhasil!</h2>
-      <p class="welcome-text">Selamat datang, <strong id="loggedInUser">Pengguna</strong></p>
+      <h2>Otentikasi 2FA Berhasil!</h2>
+      <p class="welcome-text">Selamat datang, <strong id="loggedInUser">demo_user</strong></p>
 
       <div class="security-badge">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
         </svg>
-        <span>Terotentikasi via Zero-Knowledge Proof (Groth16)</span>
+        <span>Terotentikasi via Zero-Knowledge Proof (Groth16 BN254)</span>
       </div>
 
       <div class="info-list">
         <div class="info-item">
-          <span>Metode Verifikasi</span>
-          <strong>3 Kunci Foto + Poseidon ZKP</strong>
+          <span>Kunci Visual OTP</span>
+          <strong id="verifyVisualKey" style="font-family: monospace; font-size: 0.72rem;">-</strong>
         </div>
         <div class="info-item">
-          <span>Durasi Verifikasi</span>
+          <span>Durasi Proof + Verifikasi</span>
           <strong id="verifyTime">~ ms</strong>
         </div>
         <div class="info-item">
-          <span>Privasi Gambar</span>
+          <span>Privasi Master Secret</span>
           <strong class="text-green">100% Tidak Pernah Dikirim ke Server</strong>
         </div>
       </div>
 
-      <!-- Collapsible Proof Detail Receipt -->
       <details class="proof-receipt-details">
-        <summary class="proof-receipt-summary">🔍 Lihat Rincian Bukti Kriptografi (Proof Receipt)</summary>
+        <summary class="proof-receipt-summary">Lihat Rincian Bukti Kriptografi (Proof Receipt)</summary>
         <div class="receipt-body">
           <pre id="loginProofReceipt" class="receipt-pre"></pre>
         </div>
       </details>
 
-      <div style="display: flex; gap: 10px; margin-top: 16px; draft-mode">
-        <button id="btnGoToVerifier" class="btn-primary" style="flex: 1; font-size: 0.85rem;">3. Lanjut ke Verifier &rarr;</button>
-        <button id="btnLogout" class="btn-secondary" style="flex: 1; margin-top: 4px;">Keluar (Logout)</button>
+      <div style="margin-top: 12px; text-align: left;">
+        <button type="button" id="btnTestVaultAccess" class="btn-secondary" style="width: 100%; font-size: 0.82rem; padding: 8px 12px;">
+          Uji Otorisasi Vault (/api/user/vault via Bearer Token)
+        </button>
+        <div id="vaultResponseBox" style="display: none; margin-top: 8px; background: #09090b; border: 1px solid #27272a; border-radius: 6px; padding: 10px; font-family: monospace; font-size: 0.73rem; color: #a1a1aa; white-space: pre-wrap;"></div>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 16px;">
+        <button id="btnLogout" class="btn-secondary" style="flex: 1;">Keluar (Logout)</button>
       </div>
     </div>
 
     <!-- Footer -->
     <footer class="simple-footer">
-      Zero-Knowledge Proof 2FA • Circom 2.0 • SnarkJS • BN254 Curve
+      Zero-Knowledge Visual TOTP 2FA • Circom 2.0 • SnarkJS • Web Worker • BN254 Curve
     </footer>
   </div>
 
-  <script type="module" src="./src/main.js?v=mono3"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
