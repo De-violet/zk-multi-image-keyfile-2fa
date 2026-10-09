@@ -1,13 +1,32 @@
 /* global importScripts, snarkjs */
 
-try {
-  importScripts('/vendor/snarkjs.min.js');
-} catch {
-  try {
-    importScripts('/public/vendor/snarkjs.min.js');
-  } catch {
-    importScripts('../vendor/snarkjs.min.js');
+function resolveWorkerBasePath() {
+  if (typeof self !== 'undefined' && self.location && self.location.pathname) {
+    const p = self.location.pathname;
+    const idx = p.lastIndexOf('/workers/');
+    if (idx !== -1) return p.substring(0, idx);
+    const pubIdx = p.lastIndexOf('/public/workers/');
+    if (pubIdx !== -1) return p.substring(0, pubIdx);
+    const slashIdx = p.lastIndexOf('/');
+    if (slashIdx !== -1) return p.substring(0, slashIdx);
   }
+  return '';
+}
+
+const basePath = resolveWorkerBasePath();
+const candidateScripts = [
+  basePath ? `${basePath}/vendor/snarkjs.min.js` : null,
+  basePath ? `${basePath}/public/vendor/snarkjs.min.js` : null,
+  '/vendor/snarkjs.min.js',
+  '/public/vendor/snarkjs.min.js',
+  '../vendor/snarkjs.min.js'
+].filter(Boolean);
+
+for (const scriptUrl of candidateScripts) {
+  try {
+    importScripts(scriptUrl);
+    if (typeof snarkjs !== 'undefined') break;
+  } catch {}
 }
 
 self.onmessage = async (event) => {
@@ -24,8 +43,23 @@ self.onmessage = async (event) => {
         serverNonce: serverNonce.toString()
       };
 
-      const finalWasm = wasmPath || '/zk/VisualTOTP.wasm';
-      const finalZkey = zkeyPath || '/zk/VisualTOTP_final.zkey';
+      function resolveAssetUrl(paramPath, defaultRelative) {
+        if (paramPath) {
+          if (paramPath.startsWith('http://') || paramPath.startsWith('https://')) return paramPath;
+          if (typeof self !== 'undefined' && self.location) {
+            return new URL(paramPath, self.location.href).href;
+          }
+          return paramPath;
+        }
+        const fallback = basePath ? `${basePath}${defaultRelative}` : defaultRelative;
+        if (typeof self !== 'undefined' && self.location) {
+          return new URL(fallback, self.location.href).href;
+        }
+        return fallback;
+      }
+
+      const finalWasm = resolveAssetUrl(wasmPath, '/zk/VisualTOTP.wasm');
+      const finalZkey = resolveAssetUrl(zkeyPath, '/zk/VisualTOTP_final.zkey');
 
       // Eksekusi witness calculation dan Groth16 proof generation di background thread
       const { proof, publicSignals } = await snarkjs.groth16.fullProve(

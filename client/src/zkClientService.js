@@ -2,11 +2,18 @@
  * Service klien untuk berkomunikasi dengan zkWorker.js.
  */
 
-let workerInstance = null;
+function getAdaptiveWorkerPath() {
+  if (typeof window !== 'undefined' && window.location) {
+    const p = window.location.pathname;
+    const base = p.endsWith('/') ? p.slice(0, -1) : p.substring(0, p.lastIndexOf('/'));
+    return base ? `${base}/workers/zkWorker.js` : '/workers/zkWorker.js';
+  }
+  return '/workers/zkWorker.js';
+}
 
 export function getZkWorker() {
   if (!workerInstance && typeof window !== 'undefined') {
-    workerInstance = new Worker('/workers/zkWorker.js');
+    workerInstance = new Worker(getAdaptiveWorkerPath());
   }
   return workerInstance;
 }

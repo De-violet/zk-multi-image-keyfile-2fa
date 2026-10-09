@@ -1,521 +1,133 @@
-import { hashFileDeterministic, sortImageFieldElements, hasDuplicateHashes } from './crypto/fileHash.js';
-import { generateAutoSalt, deriveSaltFromUsername, downloadBackupKey } from './crypto/saltManager.js';
-import { computeHierarchicalCommitment } from './crypto/poseidon.js';
-import { generateZkProof, verifyZkProof } from './crypto/zkProver.js';
-import { generateVisualPattern, VISUAL_PALETTE_16 } from './crypto/visualGenerator.js';
-import { MatrixRenderer } from './ui/matrixRenderer.js';
-import { generateVisualProof } from './zkClientService.js';
+/**
+ * Controller Antarmuka ZK-OTP Authenticator
+ * Menggunakan ZkCanvasSDK untuk rendering canvas dan kalkulasi proof di Web Worker.
+ */
 
-if (typeof window !== 'undefined') {
-  window.visualTotp = {
-    generateVisualPattern,
-    MatrixRenderer,
-    generateVisualProof,
-    VISUAL_PALETTE_16
-  };
-}
+let sdkInstance = null;
+let currentSessionToken = null;
 
-// State aplikasi in-memory murni
-const state = {
-  regFiles: [null, null, null],
-  loginFiles: [null, null, null],
-  recoverFiles: [null, null, null],
-  labFiles: [null, null, null],
-
-  // State Verifier Lab
-  labSalt: generateAutoSalt(),
-  labNonce: null,
-  labRootCommitment: null,
-  labWitnessInputs: null,
-  labProof: null,
-  labPublicSignals: null,
-  labVKey: null
-};
-
-// ========================================================
-// CLIENT-SIDE SERVERLESS ADAPTER (UNTUK GITHUB PAGES DEMO)
-// ========================================================
-let backendAvailable = null;
-
-function updateConnectionBadge(online) {
+// Indikator Status Backend
+async function checkBackendConnection() {
   const dot = document.getElementById('connectionDot');
   const text = document.getElementById('connectionText');
   if (!dot || !text) return;
-  if (online) {
-    dot.style.background = '#22c55e';
-    text.style.color = '#ffffff';
-    text.textContent = '🟢 Server Online (Express REST API)';
-  } else {
+
+  try {
+    const res = await fetch('/api/health');
+    if (res.ok) {
+      dot.style.background = '#22c55e';
+      text.style.color = '#ffffff';
+      text.textContent = 'Server Online (Express REST API)';
+    } else {
+      throw new Error();
+    }
+  } catch {
     dot.style.background = '#eab308';
     text.style.color = '#a1a1aa';
-    text.textContent = '🟡 Mode Mandiri (WASM Client / GitHub Pages)';
+    text.textContent = 'Mode Mandiri (WASM Client / Standalone)';
   }
 }
 
-async function hasBackend() {
-  if (backendAvailable !== null) return backendAvailable;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
-    const res = await fetch('/api/health', { method: 'GET', signal: controller.signal });
-    clearTimeout(timeoutId);
-    backendAvailable = res.ok;
-  } catch (e) {
-    backendAvailable = false;
-  }
-  updateConnectionBadge(backendAvailable);
-  return backendAvailable;
-}
-
-const localMockDB = {
-  users: new Map(),
-  activeNonces: new Map(),
-
-  async hashPassword(password, salt) {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-    const bits = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: enc.encode(salt),
-        iterations: 100000,
-        hash: 'SHA-256'
-      },
-      key,
-      256
-    );
-    return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('');
-  },
-
-  async register(username, password, rootCommitment, salt2fa, allowOverwrite = false) {
-    const key = username.toLowerCase();
-    if (this.users.has(key) && !allowOverwrite) {
-      throw new Error(`Username "${username}" sudah terdaftar. Silakan gunakan username lain atau gunakan fitur pemulihan akun jika lupa password.`);
-    }
-    const passwordSalt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-    const passwordHash = await this.hashPassword(password, passwordSalt);
-    this.users.set(key, {
-      username: key,
-      passwordHash,
-      passwordSalt,
-      rootCommitment,
-      salt2fa,
-      createdAt: new Date().toISOString()
-    });
-    return { success: true };
-  },
-
-  async login(username, password) {
-    const key = username.toLowerCase();
-    const user = this.users.get(key);
-    if (!user) throw new Error('Akun tidak ditemukan. Silakan daftar di Langkah 1 terlebih dahulu.');
-    const hash = await this.hashPassword(password, user.passwordSalt);
-    if (hash !== user.passwordHash) throw new Error('Password salah. Gunakan opsi "Lupa Password" jika Anda lupa.');
-    return { success: true, user };
-  },
-
-  async challenge(username, password) {
-    const key = username.toLowerCase();
-    const user = this.users.get(key);
-    if (!user) throw new Error('Akun tidak ditemukan. Silakan daftar di Langkah 1 terlebih dahulu.');
-    const hash = await this.hashPassword(password, user.passwordSalt);
-    if (hash !== user.passwordHash) throw new Error('Password salah. Gunakan opsi "Lupa Password" jika Anda lupa.');
-
-    const rand = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-    const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
-    const sessionNonce = (BigInt('0x' + rand) % BN254_R).toString();
-    this.activeNonces.set(key, sessionNonce);
-    return {
-      success: true,
-      sessionNonce,
-      expiresIn: 60,
-      user
-    };
-  },
-
-  async verify2fa(username, sessionNonce, sessionAuthToken, proof) {
-    const key = username.toLowerCase();
-    const user = this.users.get(key);
-    if (!user) throw new Error('Akun tidak ditemukan.');
-    const active = this.activeNonces.get(key);
-    if (active !== sessionNonce) throw new Error('Sesi 2FA tidak valid atau kedaluwarsa.');
-    this.activeNonces.delete(key);
-
-    let vKey = state.labVKey;
-    if (!vKey) {
-      const vKeyRes = await fetch('./public/zk/verification_key.json').catch(() => fetch('/public/zk/verification_key.json'));
-      vKey = await vKeyRes.json();
-      state.labVKey = vKey;
-    }
-
-    const publicSignals = [sessionAuthToken, user.rootCommitment, sessionNonce];
-    const isValid = await verifyZkProof(vKey, publicSignals, proof);
-    if (!isValid) throw new Error('Bukti ZKP 3 Foto Kunci Ditolak! Foto tidak cocok.');
-
-    return {
-      success: true,
-      message: 'Verifikasi ZK-Proof 3 Kunci Foto Berhasil!',
-      user
-    };
-  },
-
-  async recoverChallenge(username) {
-    const key = username.toLowerCase();
-    const user = this.users.get(key);
-    if (!user) throw new Error('Akun "' + username + '" tidak ditemukan.');
-    const rand = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-    const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
-    const sessionNonce = (BigInt('0x' + rand) % BN254_R).toString();
-    this.activeNonces.set(key, sessionNonce);
-    return {
-      success: true,
-      sessionNonce
-    };
-  },
-
-  async recoverReset(username, sessionNonce, sessionAuthToken, proof, newPassword) {
-    const key = username.toLowerCase();
-    const user = this.users.get(key);
-    if (!user) throw new Error('Akun tidak ditemukan.');
-    const active = this.activeNonces.get(key);
-    if (active !== sessionNonce) throw new Error('Sesi pemulihan tidak valid atau kedaluwarsa.');
-    this.activeNonces.delete(key);
-
-    let vKey = state.labVKey;
-    if (!vKey) {
-      const vKeyRes = await fetch('./public/zk/verification_key.json').catch(() => fetch('/public/zk/verification_key.json'));
-      vKey = await vKeyRes.json();
-      state.labVKey = vKey;
-    }
-
-    const publicSignals = [sessionAuthToken, user.rootCommitment, sessionNonce];
-    const isValid = await verifyZkProof(vKey, publicSignals, proof);
-    if (!isValid) throw new Error('Bukti ZKP 3 Foto Kunci Ditolak! Foto tidak cocok.');
-
-    const passwordSalt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
-    const passwordHash = await this.hashPassword(newPassword, passwordSalt);
-    user.passwordHash = passwordHash;
-    user.passwordSalt = passwordSalt;
-    return { success: true };
-  }
-};
-
-// Helper status
 function showStatus(elementId, type, message) {
-  const box = document.getElementById(elementId);
-  if (!box) return;
-  box.className = `status-box ${type}`;
-  box.textContent = message;
-  box.style.display = 'block';
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  el.className = `status-box ${type}`;
+  el.textContent = message;
+  el.style.display = 'block';
 }
 
 function hideStatus(elementId) {
-  const box = document.getElementById(elementId);
-  if (box) box.style.display = 'none';
+  const el = document.getElementById(elementId);
+  if (el) el.style.display = 'none';
 }
 
-// Helper untuk mengolah pemilihan file slot
-function handleSlotFile(mode, index, file) {
-  if (!file) return;
-  const slot = document.getElementById(`${mode}Slot${index + 1}`);
-  const preview = document.getElementById(`${mode}Preview${index + 1}`);
+function initSdk() {
+  const canvas = document.getElementById('totpCanvas');
+  const secretInput = document.getElementById('totpMasterSecret');
+  const windowLabel = document.getElementById('totpWindowLabel');
+  const secondsLeftEl = document.getElementById('totpSecondsLeft');
+  const inspectorWindow = document.getElementById('inspectorWindow');
+  const inspectorMatrix = document.getElementById('inspectorMatrix');
 
-  if (mode === 'reg') {
-    state.regFiles[index] = file;
-  } else if (mode === 'login') {
-    state.loginFiles[index] = file;
-  } else if (mode === 'recover') {
-    state.recoverFiles[index] = file;
-  } else if (mode === 'lab') {
-    state.labFiles[index] = file;
-    updateLabFileDetails();
-    resetLabPipeline();
+  if (!canvas || typeof window === 'undefined' || !window.ZkCanvasSDK) return;
+
+  if (sdkInstance) {
+    sdkInstance.destroy();
   }
 
-  if (slot) slot.classList.add('filled');
-  const reader = new FileReader();
-  reader.onload = (evt) => {
-    if (!preview) return;
-    preview.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = evt.target.result;
-    img.className = 'slot-img-preview';
-    img.alt = file.name;
+  const secret = secretInput ? secretInput.value.trim() : '12345678901234567890';
 
-    const span = document.createElement('span');
-    span.style.cssText = 'position: absolute; bottom: 4px; background: rgba(0,0,0,0.75); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
-    span.textContent = file.name;
-
-    preview.appendChild(img);
-    preview.appendChild(span);
-  };
-  reader.readAsDataURL(file);
-}
-
-// Setup slot upload file dengan dukungan Drag & Drop
-function setupSlot(mode, index) {
-  const slot = document.getElementById(`${mode}Slot${index + 1}`);
-  const input = document.getElementById(`${mode}File${index + 1}`);
-
-  if (!slot || !input) return;
-
-  slot.addEventListener('click', () => input.click());
-
-  // Dukungan Drag & Drop
-  slot.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    slot.style.borderColor = '#ffffff';
-  });
-  slot.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    slot.style.borderColor = '';
-  });
-  slot.addEventListener('drop', (e) => {
-    e.preventDefault();
-    slot.style.borderColor = '';
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) handleSlotFile(mode, index, file);
+  sdkInstance = new window.ZkCanvasSDK({
+    secret,
+    canvas,
+    rotationIntervalMs: 60000,
+    workerScriptUrl: '/sdk/workerScript.js'
   });
 
-  input.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (file) handleSlotFile(mode, index, file);
+  sdkInstance.on('tick', ({ remainingMs }) => {
+    const sec = Math.ceil(remainingMs / 1000);
+    if (secondsLeftEl) secondsLeftEl.textContent = `${sec}s`;
   });
-}
 
-function resetSlots(mode) {
-  [0, 1, 2].forEach(i => {
-    const slot = document.getElementById(`${mode}Slot${i + 1}`);
-    const input = document.getElementById(`${mode}File${i + 1}`);
-    const preview = document.getElementById(`${mode}Preview${i + 1}`);
-
-    if (input) input.value = '';
-    if (slot) slot.classList.remove('filled');
-    if (preview) {
-      preview.innerHTML = `
-        <span class="slot-number">${i + 1}</span>
-        <span class="slot-text">Pilih Foto ${i + 1}</span>
-      `;
+  sdkInstance.on('patternChange', ({ window: win, matrix }) => {
+    if (windowLabel) windowLabel.textContent = win;
+    if (inspectorWindow) inspectorWindow.textContent = win;
+    if (inspectorMatrix && matrix) {
+      inspectorMatrix.textContent = matrix.slice(0, 16).join(', ') + '... (64 sel)';
     }
   });
-  if (mode === 'reg') state.regFiles = [null, null, null];
-  if (mode === 'login') state.loginFiles = [null, null, null];
-  if (mode === 'recover') state.recoverFiles = [null, null, null];
-  if (mode === 'lab') state.labFiles = [null, null, null];
-}
 
-function updateLabFileDetails() {
-  const details = document.getElementById('labFileDetails');
-  if (!details) return;
-
-  const validFiles = state.labFiles.filter(f => f !== null);
-  if (validFiles.length === 0) {
-    details.style.display = 'none';
-    return;
-  }
-
-  details.style.display = 'flex';
-  details.innerHTML = '';
-  state.labFiles.forEach((f, i) => {
-    const item = document.createElement('div');
-    if (!f) {
-      item.innerHTML = `• Foto ${i + 1}: <span style="color:#71717a; font-style:italic;">Belum dipilih</span>`;
-    } else {
-      const sizeKb = (f.size / 1024).toFixed(1);
-      item.textContent = `• Foto ${i + 1}: `;
-      const strong = document.createElement('strong');
-      strong.textContent = f.name;
-      item.appendChild(strong);
-      item.appendChild(document.createTextNode(` (${sizeKb} KB)`));
-    }
-    details.appendChild(item);
-  });
-}
-
-function resetLabPipeline() {
-  const btnGenProof = document.getElementById('btnLabGenProof');
-  const btnTamper = document.getElementById('btnLabTamperProof');
-  const btnCopy = document.getElementById('btnLabCopyProof');
-  const btnVerify = document.getElementById('btnLabRunVerify');
-  const labProofOutput = document.getElementById('labProofOutput');
-  const labVerifyOutput = document.getElementById('labVerifyOutput');
-
-  if (btnGenProof) btnGenProof.disabled = true;
-  if (btnTamper) { btnTamper.disabled = true; btnTamper.textContent = '🧪 Rusak Bukti (Tamper Proof)'; }
-  if (btnCopy) btnCopy.disabled = true;
-  if (btnVerify) btnVerify.disabled = true;
-
-  if (labProofOutput) labProofOutput.innerHTML = '<span class="code-placeholder">Menunggu sintesis bukti...</span>';
-  if (labVerifyOutput) {
-    labVerifyOutput.className = 'verifier-result-box';
-    labVerifyOutput.innerHTML = '<span class="code-placeholder">Menunggu eksekusi verifier...</span>';
-  }
+  sdkInstance.start();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Cek koneksi backend untuk memperbarui indikator status
-  hasBackend();
+  checkBackendConnection();
+  initSdk();
 
-  // Pasang slot file untuk semua mode
-  [0, 1, 2].forEach(i => {
-    setupSlot('reg', i);
-    setupSlot('login', i);
-    setupSlot('recover', i);
-    setupSlot('lab', i);
-  });
-
-  const appContainer = document.getElementById('appContainer');
-  const tabBtnRegister = document.getElementById('tabBtnRegister');
-  const tabBtnLogin = document.getElementById('tabBtnLogin');
-  const tabBtnVerifier = document.getElementById('tabBtnVerifier');
-  const tabBtnVisualTotp = document.getElementById('tabBtnVisualTotp');
-
-  const formRegister = document.getElementById('formRegister');
-  const formLogin = document.getElementById('formLogin');
-  const formRecovery = document.getElementById('formRecovery');
-  const sectionVerifier = document.getElementById('sectionVerifier');
-  const sectionVisualTotp = document.getElementById('sectionVisualTotp');
+  const secretInput = document.getElementById('totpMasterSecret');
+  const userInput = document.getElementById('totpUsername');
+  const btnAuth = document.getElementById('btnAuthVisualTotp');
   const authCard = document.getElementById('authCard');
   const successCard = document.getElementById('successCard');
 
-  // Tab 1: Daftar Akun
-  function showRegisterTab() {
-    appContainer.classList.remove('wide-mode');
-    authCard.style.display = 'block';
-    successCard.style.display = 'none';
+  // Tab Navigasi
+  const tabBtnAuthenticator = document.getElementById('tabBtnAuthenticator');
+  const tabBtnInspector = document.getElementById('tabBtnInspector');
+  const viewAuthenticator = document.getElementById('viewAuthenticator');
+  const viewInspector = document.getElementById('viewInspector');
 
-    tabBtnRegister.classList.add('active');
-    tabBtnLogin.classList.remove('active');
-    tabBtnVerifier.classList.remove('active');
-    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
+  if (tabBtnAuthenticator && tabBtnInspector) {
+    tabBtnAuthenticator.addEventListener('click', () => {
+      tabBtnAuthenticator.classList.add('active');
+      tabBtnInspector.classList.remove('active');
+      viewAuthenticator.style.display = 'flex';
+      viewInspector.style.display = 'none';
+    });
 
-    formRegister.style.display = 'flex';
-    formLogin.style.display = 'none';
-    formRecovery.style.display = 'none';
-    sectionVerifier.style.display = 'none';
-    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
-
-    hideStatus('regStatus');
-    hideStatus('loginStatus');
-    hideStatus('recoverStatus');
+    tabBtnInspector.addEventListener('click', () => {
+      tabBtnInspector.classList.add('active');
+      tabBtnAuthenticator.classList.remove('active');
+      viewInspector.style.display = 'flex';
+      viewAuthenticator.style.display = 'none';
+    });
   }
 
-  // Tab 2: Login Akun
-  function showLoginTab() {
-    appContainer.classList.remove('wide-mode');
-    authCard.style.display = 'block';
-    successCard.style.display = 'none';
-
-    tabBtnLogin.classList.add('active');
-    tabBtnRegister.classList.remove('active');
-    tabBtnVerifier.classList.remove('active');
-    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
-
-    formLogin.style.display = 'flex';
-    formRegister.style.display = 'none';
-    formRecovery.style.display = 'none';
-    sectionVerifier.style.display = 'none';
-    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
-
-    hideStatus('regStatus');
-    hideStatus('loginStatus');
-    hideStatus('recoverStatus');
+  // Update SDK saat master secret diubah
+  if (secretInput) {
+    secretInput.addEventListener('change', () => {
+      initSdk();
+    });
   }
 
-  // Tab 3: Verifier
-  function showVerifierTab() {
-    appContainer.classList.add('wide-mode');
-    authCard.style.display = 'block';
-    successCard.style.display = 'none';
-
-    tabBtnVerifier.classList.add('active');
-    tabBtnRegister.classList.remove('active');
-    tabBtnLogin.classList.remove('active');
-    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.remove('active');
-
-    sectionVerifier.style.display = 'flex';
-    formRegister.style.display = 'none';
-    formLogin.style.display = 'none';
-    formRecovery.style.display = 'none';
-    if (sectionVisualTotp) sectionVisualTotp.style.display = 'none';
-  }
-
-  // Tab 4: Visual TOTP
-  let totpRenderer = null;
-  function showVisualTotpTab() {
-    appContainer.classList.remove('wide-mode');
-    authCard.style.display = 'block';
-    successCard.style.display = 'none';
-
-    if (tabBtnVisualTotp) tabBtnVisualTotp.classList.add('active');
-    tabBtnRegister.classList.remove('active');
-    tabBtnLogin.classList.remove('active');
-    tabBtnVerifier.classList.remove('active');
-
-    if (sectionVisualTotp) sectionVisualTotp.style.display = 'flex';
-    formRegister.style.display = 'none';
-    formLogin.style.display = 'none';
-    formRecovery.style.display = 'none';
-    sectionVerifier.style.display = 'none';
-
-    hideStatus('totpStatus');
-
-    const canvas = document.getElementById('totpCanvas');
-    if (canvas && !totpRenderer) {
-      const windowLabel = document.getElementById('totpWindowLabel');
-      const secondsLeftEl = document.getElementById('totpSecondsLeft');
-      const secretInput = document.getElementById('totpMasterSecret');
-
-      totpRenderer = new MatrixRenderer(canvas, {
-        intervalSec: 60,
-        onTick: (sec) => {
-          if (secondsLeftEl) secondsLeftEl.textContent = sec + 's';
-        },
-        onWindowChange: (win) => {
-          if (windowLabel) windowLabel.textContent = win;
-          const secret = secretInput ? secretInput.value.trim() : '12345678901234567890';
-          let seed = '0x' + win.toString(16).padStart(16, '0');
-          if (typeof window !== 'undefined' && window.poseidon && window.poseidon.poseidon) {
-            try {
-              seed = window.poseidon.poseidon([BigInt(secret || 0), BigInt(win)]).toString();
-            } catch (e) {}
-          }
-          const pattern = generateVisualPattern(seed);
-          totpRenderer.drawMatrix(pattern.cells, pattern.palette);
-        }
-      });
-      totpRenderer.startTimer();
-    }
-  }
-
-  tabBtnRegister.addEventListener('click', showRegisterTab);
-  tabBtnLogin.addEventListener('click', showLoginTab);
-  tabBtnVerifier.addEventListener('click', showVerifierTab);
-  if (tabBtnVisualTotp) tabBtnVisualTotp.addEventListener('click', showVisualTotpTab);
-
-  const btnAuthVisualTotp = document.getElementById('btnAuthVisualTotp');
-  if (btnAuthVisualTotp) {
-    btnAuthVisualTotp.addEventListener('click', async () => {
-      const secretInput = document.getElementById('totpMasterSecret');
-      const userInput = document.getElementById('totpUsername');
-      const masterSecret = secretInput ? secretInput.value.trim() : '';
-      const username = userInput ? userInput.value.trim() : 'demo_user';
-
-      if (!masterSecret) {
-        showStatus('totpStatus', 'error', 'Master secret wajib diisi.');
-        return;
-      }
-
-      btnAuthVisualTotp.disabled = true;
-      showStatus('totpStatus', 'loading', 'Meminta ephemeral challenge nonce dari server...');
+  // Tombol Autentikasi Visual TOTP
+  if (btnAuth) {
+    btnAuth.addEventListener('click', async () => {
+      const username = (userInput ? userInput.value.trim() : '') || 'demo_user';
+      btnAuth.disabled = true;
+      showStatus('totpStatus', 'info', 'Meminta challenge nonce dari server...');
 
       try {
+        // 1. Dapatkan Nonce Ephemeral
         const chalRes = await fetch('/api/auth/visual-challenge', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -523,810 +135,95 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         const chalData = await chalRes.json();
         if (!chalRes.ok || !chalData.success) {
-          throw new Error(chalData.error || 'Gagal memperoleh ephemeral nonce.');
+          throw new Error(chalData.error || 'Gagal memperoleh challenge nonce.');
         }
 
         const serverNonce = chalData.sessionNonce;
-        const timeWindow = chalData.timeWindow || Math.floor(Date.now() / 1000 / 60);
+        showStatus('totpStatus', 'info', 'Menghitung Groth16 Proof di Web Worker...');
 
-        showStatus('totpStatus', 'loading', 'Menghitung Groth16 Proof di SnarkJS Web Worker...');
+        // 2. Kalkulasi ZK Proof via SDK
+        const proofResult = await sdkInstance.generateProof(serverNonce);
 
-        const { proof, publicSignals, durationMs } = await generateVisualProof({
-          masterSecret,
-          timeWindow,
-          serverNonce,
-          wasmPath: '/zk/VisualTOTP.wasm',
-          zkeyPath: '/zk/VisualTOTP_final.zkey'
-        });
+        showStatus('totpStatus', 'info', `Proof selesai (${proofResult.durationMs}ms). Mengirim verifikasi ke server...`);
 
-        showStatus('totpStatus', 'loading', `Proof selesai (${durationMs}ms). Memvalidasi ke server...`);
-
+        // 3. Verifikasi ke Server
         const verifyRes = await fetch('/api/auth/verify-2fa', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             username,
-            sessionNonce,
-            proof,
-            publicSignals,
-            clientTimeWindow: timeWindow
+            sessionNonce: serverNonce,
+            proof: proofResult.proof,
+            publicSignals: proofResult.publicSignals,
+            clientTimeWindow: sdkInstance.getCurrentWindow()
           })
         });
 
         const verifyData = await verifyRes.json();
         if (!verifyRes.ok || !verifyData.success) {
-          throw new Error(verifyData.error || 'Verifikasi 2FA server gagal.');
+          throw new Error(verifyData.error || 'Verifikasi server gagal.');
         }
 
-        showStatus('totpStatus', 'success', `✓ Autentikasi Visual TOTP Berhasil! Waktu komputasi proof: ${durationMs}ms.`);
+        // Simpan sesi dan tampilkan layar sukses
+        currentSessionToken = verifyData.sessionToken;
+        authCard.style.display = 'none';
+        successCard.style.display = 'block';
+
+        document.getElementById('loggedInUser').textContent = username;
+        document.getElementById('verifyVisualKey').textContent = verifyData.visualKey || proofResult.publicSignals[0];
+        document.getElementById('verifyTime').textContent = `${proofResult.durationMs}ms (Proof) + ${verifyData.verificationDurationMs || 0}ms (Server)`;
+
+        const receiptEl = document.getElementById('loginProofReceipt');
+        if (receiptEl) {
+          receiptEl.textContent = JSON.stringify({
+            protocol: proofResult.proof.protocol,
+            curve: proofResult.proof.curve,
+            publicSignals: proofResult.publicSignals,
+            pi_a: proofResult.proof.pi_a,
+            serverVerified: true
+          }, null, 2);
+        }
+
+        hideStatus('totpStatus');
       } catch (err) {
-        showStatus('totpStatus', 'error', 'Autentikasi gagal: ' + err.message);
+        showStatus('totpStatus', 'error', 'Otentikasi gagal: ' + err.message);
       } finally {
-        btnAuthVisualTotp.disabled = false;
+        btnAuth.disabled = false;
       }
     });
   }
 
-  // Navigasi Mode Pemulihan Akun (Lupa Password)
-  document.getElementById('btnShowRecovery').addEventListener('click', () => {
-    formLogin.style.display = 'none';
-    formRecovery.style.display = 'flex';
-    hideStatus('recoverStatus');
-    const loginUserVal = document.getElementById('loginUsername').value.trim();
-    if (loginUserVal) {
-      document.getElementById('recoverUsername').value = loginUserVal;
-    }
-  });
-
-  document.getElementById('btnCancelRecovery').addEventListener('click', () => {
-    formRecovery.style.display = 'none';
-    formLogin.style.display = 'flex';
-    hideStatus('recoverStatus');
-  });
-
-  // Toggle Slot 2FA Login
-  const checkEnable2FALogin = document.getElementById('checkEnable2FALogin');
-  const login2faSlotsContainer = document.getElementById('login2faSlotsContainer');
-  if (checkEnable2FALogin && login2faSlotsContainer) {
-    checkEnable2FALogin.addEventListener('change', () => {
-      login2faSlotsContainer.style.display = checkEnable2FALogin.checked ? 'block' : 'none';
-    });
-  }
-
-  // Default: Buka langkah 1 (Daftar Akun)
-  showRegisterTab();
-
-  // ==========================================
-  // 1. DAFTAR AKUN
-  // ==========================================
-  formRegister.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideStatus('regStatus');
-
-    const username = document.getElementById('regUsername').value.trim();
-    const password = document.getElementById('regPassword').value;
-    const [f1, f2, f3] = state.regFiles;
-
-    if (!f1 || !f2 || !f3) {
-      showStatus('regStatus', 'error', 'Pilih 3 foto dari perangkat Anda sebagai kunci 2FA.');
-      return;
-    }
-
-    const btn = document.getElementById('btnRegSubmit');
-    const btnText = btn.querySelector('.btn-text');
-    const spinner = btn.querySelector('.spinner');
-
-    btn.disabled = true;
-    btnText.textContent = 'Menghitung Komitmen ZKP...';
-    spinner.style.display = 'block';
-
-    try {
-      showStatus('regStatus', 'info', 'Menghitung reduksi hash 3 foto secara lokal di browser...');
-      const [rawH1, rawH2, rawH3] = await Promise.all([
-        hashFileDeterministic(f1),
-        hashFileDeterministic(f2),
-        hashFileDeterministic(f3)
-      ]);
-
-      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
-      if (hasDuplicateHashes(rawHashes)) {
-        showStatus('regStatus', 'error', 'Ketiga foto harus berbeda! Menggunakan foto yang sama mengurangi entropi keamanan.');
-        return;
-      }
-
-      // Penyortiran deterministik (Order-Independent Keyfile)
-      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
-
-      // Salt deterministik unik per username (tertanam aman di dalam commitment)
-      const saltObj = await deriveSaltFromUsername(username);
-
-      const { rootCommitment } = await computeHierarchicalCommitment(
-        h1,
-        h2,
-        h3,
-        saltObj.fieldElement
-      );
-
-      showStatus('regStatus', 'info', 'Mendaftarkan akun (hanya menyimpan Root Commitment, foto tetap privat)...');
-
-      const backend = await hasBackend();
-      if (backend) {
-        const res = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            password,
-            rootCommitment,
-            salt2fa: saltObj.fieldElement
-          })
-        });
-
-        const data = await res.json();
-        if (!res.ok) {
-          showStatus('regStatus', 'error', data.error || 'Gagal mendaftar.');
-          return;
-        }
-      } else {
-        // Fallback in-memory untuk GitHub Pages
-        await localMockDB.register(username, password, rootCommitment, saltObj.fieldElement);
-      }
-
-      showStatus('regStatus', 'success', `✓ Akun "${username}" berhasil didaftarkan! Mengalihkan ke Langkah 2: Login Akun...`);
-
-      const btnBackup = document.getElementById('btnDownloadBackupKey');
-      if (btnBackup) {
-        btnBackup.style.display = 'block';
-        btnBackup.onclick = () => {
-          downloadBackupKey(username, saltObj.fieldElement, rootCommitment);
-        };
-      }
-
-      setTimeout(() => {
-        showLoginTab();
-        document.getElementById('loginUsername').value = username;
-        document.getElementById('loginPassword').value = '';
-        showStatus('loginStatus', 'info', `Akun "${username}" siap. Silakan masukkan password Anda untuk masuk.`);
-      }, 1500);
-
-    } catch (err) {
-      showStatus('regStatus', 'error', err.message || 'Terjadi kesalahan saat pendaftaran.');
-    } finally {
-      btn.disabled = false;
-      btnText.textContent = '1. Daftarkan Akun & Kunci 2FA';
-      spinner.style.display = 'none';
-    }
-  });
-
-  // ==========================================
-  // 2. LOGIN AKUN (STANDAR PASSWORD ATAU 2FA PENUH)
-  // ==========================================
-  formLogin.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideStatus('loginStatus');
-
-    const username = document.getElementById('loginUsername').value.trim();
-    const password = document.getElementById('loginPassword').value;
-    const is2FAEnabled = checkEnable2FALogin && checkEnable2FALogin.checked;
-
-    if (!username || !password) {
-      showStatus('loginStatus', 'error', 'Masukkan username dan password Anda.');
-      return;
-    }
-
-    const btn = document.getElementById('btnLoginSubmit');
-    const btnText = btn.querySelector('.btn-text');
-    const spinner = btn.querySelector('.spinner');
-
-    btn.disabled = true;
-    spinner.style.display = 'block';
-
-    const startTime = performance.now();
-
-    try {
-      const backend = await hasBackend();
-
-      if (is2FAEnabled) {
-        // --- JALUR LOGIN 2FA LENGKAP VIA 3 FOTO KUNCI ZKP ---
-        const [f1, f2, f3] = state.loginFiles;
-        if (!f1 || !f2 || !f3) {
-          showStatus('loginStatus', 'error', 'Pilih 3 file foto kunci 2FA Anda untuk verifikasi ZKP.');
-          btn.disabled = false;
-          spinner.style.display = 'none';
-          return;
-        }
-
-        btnText.textContent = '1/3 Meminta Challenge...';
-        showStatus('loginStatus', 'info', '1/3 Memverifikasi password & meminta token sesi 2FA...');
-
-        let sessionNonce;
-        if (backend) {
-          const chalRes = await fetch('/api/auth/challenge', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-          const chalData = await chalRes.json();
-          if (!chalRes.ok) {
-            showStatus('loginStatus', 'error', chalData.error || 'Password salah atau akun tidak ditemukan.');
-            return;
-          }
-          sessionNonce = chalData.sessionNonce;
-        } else {
-          const localChal = await localMockDB.challenge(username, password);
-          sessionNonce = localChal.sessionNonce;
-        }
-
-        btnText.textContent = '2/3 Membuat Bukti ZK...';
-        showStatus('loginStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
-
-        const [rawH1, rawH2, rawH3] = await Promise.all([
-          hashFileDeterministic(f1),
-          hashFileDeterministic(f2),
-          hashFileDeterministic(f3)
-        ]);
-
-        const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
-        if (hasDuplicateHashes(rawHashes)) {
-          showStatus('loginStatus', 'error', 'Ketiga foto kunci harus berbeda!');
-          btn.disabled = false;
-          spinner.style.display = 'none';
-          return;
-        }
-
-        // Penyortiran deterministik (Order-Independent Keyfile)
-        const [h1, h2, h3] = sortImageFieldElements(rawHashes);
-
-        const saltObj = await deriveSaltFromUsername(username);
-
-        const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
-          h1,
-          h2,
-          h3,
-          saltObj.fieldElement
-        );
-
-        const zkpResult = await generateZkProof({
-          h1: h1,
-          h2: h2,
-          h3: h3,
-          salt: saltObj.fieldElement,
-          rootCommitment: localRootCommitment,
-          sessionNonce: sessionNonce
-        });
-
-        if (!zkpResult.success) {
-          showStatus('loginStatus', 'error', '❌ Gagal menyintesis bukti ZKP di browser: ' + (zkpResult.error || 'Periksa integritas berkas WASM/zkey.'));
-          return;
-        }
-
-        btnText.textContent = '3/3 Memverifikasi Bukti...';
-        showStatus('loginStatus', 'info', '3/3 Mengirim bukti kriptografis ke server untuk validasi pairing Groth16...');
-
-        let authResult;
-        if (backend) {
-          const verifyRes = await fetch('/api/auth/verify-2fa', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              username,
-              sessionNonce,
-              sessionAuthToken: zkpResult.sessionAuthToken,
-              proof: zkpResult.proof
-            })
-          });
-          const verifyData = await verifyRes.json();
-          if (!verifyRes.ok) {
-            showStatus('loginStatus', 'error', verifyData.error || '❌ Verifikasi ZKP Ditolak Server: Foto yang diunggah tidak cocok dengan 3 foto kunci 2FA yang terdaftar.');
-            return;
-          }
-          authResult = verifyData;
-        } else {
-          authResult = await localMockDB.verify2fa(
-            username,
-            sessionNonce,
-            zkpResult.sessionAuthToken,
-            zkpResult.proof
-          );
-        }
-
-        const totalDuration = Math.round(performance.now() - startTime);
-
-        // Simpan sesi ke sessionStorage
-        const token2fa = authResult?.sessionToken || 'mock_2fa_session_token';
-        sessionStorage.setItem('zk2fa_session_token', token2fa);
-        sessionStorage.setItem('zk2fa_session_user', username);
-
-        authCard.style.display = 'none';
-        successCard.style.display = 'block';
-
-        document.getElementById('loggedInUser').textContent = `@${username}`;
-        document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
-
-        const receiptPre = document.getElementById('loginProofReceipt');
-        if (receiptPre) {
-          receiptPre.textContent = JSON.stringify({
-            status: 'AUTHENTICATED_2FA',
-            authFactor: 'Multi-Factor (Faktor 1: Password Master + Faktor 2: 3-Image Keyfile ZKP)',
-            zkpVerification: 'VERIFIED_VALID (Groth16 Pairing Cocok)',
-            verificationDurationMs: authResult.verificationDurationMs || '< 5 ms',
-            sessionAuthToken: zkpResult.sessionAuthToken,
-            authenticatedAt: new Date().toISOString()
-          }, null, 2);
-        }
-
-      } else {
-        // --- JALUR LOGIN STANDAR CEPAT (FAKTOR 1 PASSWORD) ---
-        btnText.textContent = 'Memverifikasi...';
-        let authUser;
-        let stdToken = 'mock_session_token';
-
-        if (backend) {
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password })
-          });
-
-          const data = await res.json();
-          if (!res.ok) {
-            showStatus('loginStatus', 'error', data.error || 'Username atau password salah.');
-            return;
-          }
-          authUser = data.user;
-          stdToken = data.sessionToken;
-        } else {
-          const localRes = await localMockDB.login(username, password);
-          authUser = localRes.user;
-        }
-
-        // Simpan sesi ke sessionStorage
-        sessionStorage.setItem('zk2fa_session_token', stdToken);
-        sessionStorage.setItem('zk2fa_session_user', username);
-
-        const totalDuration = Math.round(performance.now() - startTime);
-
-        authCard.style.display = 'none';
-        successCard.style.display = 'block';
-
-        document.getElementById('loggedInUser').textContent = `@${username}`;
-        document.getElementById('verifyTime').textContent = `${totalDuration} ms`;
-
-        const receiptPre = document.getElementById('loginProofReceipt');
-        if (receiptPre) {
-          receiptPre.textContent = JSON.stringify({
-            status: 'AUTHENTICATED',
-            authFactor: 'Factor 1 (Master Passphrase)',
-            twoFactorStatus: 'Active (3-Image Keyfile Commitment on Server)',
-            recoveryCapability: 'Zero-Knowledge Self-Sovereign Recovery Enabled',
-            authenticatedAt: authUser?.authenticatedAt || new Date().toISOString()
-          }, null, 2);
-        }
-      }
-
-    } catch (err) {
-      showStatus('loginStatus', 'error', err.message || 'Koneksi error.');
-    } finally {
-      btn.disabled = false;
-      btnText.textContent = '2. Masuk ke Akun';
-      spinner.style.display = 'none';
-    }
-  });
-
-  // ==========================================
-  // SKENARIO LUPA PASSWORD (PEMULIHAN VIA 2FA ZKP)
-  // ==========================================
-  formRecovery.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    hideStatus('recoverStatus');
-
-    const username = document.getElementById('recoverUsername').value.trim();
-    const newPassword = document.getElementById('recoverNewPassword').value;
-    const [f1, f2, f3] = state.recoverFiles;
-
-    if (!username || !newPassword) {
-      showStatus('recoverStatus', 'error', 'Mohon isi username dan password baru.');
-      return;
-    }
-
-    if (!f1 || !f2 || !f3) {
-      showStatus('recoverStatus', 'error', 'Pilih 3 foto kunci 2FA yang Anda miliki untuk membuktikan identitas.');
-      return;
-    }
-
-    const btn = document.getElementById('btnRecoverSubmit');
-    const btnText = btn.querySelector('.btn-text');
-    const spinner = btn.querySelector('.spinner');
-
-    btn.disabled = true;
-    spinner.style.display = 'block';
-
-    try {
-      btnText.textContent = 'Meminta Challenge...';
-      showStatus('recoverStatus', 'info', '1/3 Meminta token sesi pemulihan untuk @' + username + '...');
-
-      const backend = await hasBackend();
-      let sessionNonce;
-
-      if (backend) {
-        const chalRes = await fetch('/api/auth/recover-challenge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
-        });
-
-        const chalData = await chalRes.json();
-        if (!chalRes.ok) {
-          showStatus('recoverStatus', 'error', chalData.error || 'Akun tidak ditemukan.');
-          return;
-        }
-
-        sessionNonce = chalData.sessionNonce;
-      } else {
-        const chalData = await localMockDB.recoverChallenge(username);
-        sessionNonce = chalData.sessionNonce;
-      }
-
-      btnText.textContent = 'Membuat Bukti ZK...';
-      showStatus('recoverStatus', 'info', '2/3 Menghitung ZK-Proof dari 3 foto kunci di browser...');
-
-      const [rawH1, rawH2, rawH3] = await Promise.all([
-        hashFileDeterministic(f1),
-        hashFileDeterministic(f2),
-        hashFileDeterministic(f3)
-      ]);
-
-      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
-      if (hasDuplicateHashes(rawHashes)) {
-        showStatus('recoverStatus', 'error', 'Ketiga foto kunci harus berbeda!');
-        btn.disabled = false;
-        spinner.style.display = 'none';
-        return;
-      }
-
-      // Penyortiran deterministik (Order-Independent Keyfile)
-      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
-
-      // Salt deterministik per username - server tidak perlu membocorkan salt atau commitment
-      const saltObj = await deriveSaltFromUsername(username);
-
-      const { rootCommitment: localRootCommitment } = await computeHierarchicalCommitment(
-        h1,
-        h2,
-        h3,
-        saltObj.fieldElement
-      );
-
-      const zkpResult = await generateZkProof({
-        h1: h1,
-        h2: h2,
-        h3: h3,
-        salt: saltObj.fieldElement,
-        rootCommitment: localRootCommitment,
-        sessionNonce: sessionNonce
-      });
-
-      if (!zkpResult.success) {
-        showStatus('recoverStatus', 'error', '❌ Gagal menyintesis bukti ZKP di browser: ' + (zkpResult.error || 'Periksa integritas berkas WASM/zkey.'));
-        return;
-      }
-
-      btnText.textContent = 'Mereset Password...';
-      showStatus('recoverStatus', 'info', '3/3 Mengirim bukti ZKP untuk mereset password...');
-
-      if (backend) {
-        const resetRes = await fetch('/api/auth/recover-reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            sessionNonce,
-            sessionAuthToken: zkpResult.sessionAuthToken,
-            proof: zkpResult.proof,
-            newPassword
-          })
-        });
-
-        const resetData = await resetRes.json();
-        if (!resetRes.ok) {
-          showStatus('recoverStatus', 'error', resetData.error || '❌ Verifikasi ZKP Ditolak Server: Foto yang Anda berikan tidak cocok dengan kunci 2FA akun ini.');
-          return;
-        }
-      } else {
-        await localMockDB.recoverReset(username, sessionNonce, zkpResult.sessionAuthToken, zkpResult.proof, newPassword);
-      }
-
-      showStatus('recoverStatus', 'success', '✓ Sukses! Password berhasil direset via otentikasi 3 foto 2FA ZKP! Mengalihkan ke Login...');
-
-      setTimeout(() => {
-        formRecovery.style.display = 'none';
-        formLogin.style.display = 'flex';
-        document.getElementById('loginUsername').value = username;
-        document.getElementById('loginPassword').value = '';
-        showStatus('loginStatus', 'success', 'Password baru berhasil aktif! Silakan login menggunakan password baru Anda.');
-      }, 1500);
-
-    } catch (err) {
-      showStatus('recoverStatus', 'error', 'Kesalahan: ' + (err.message || err));
-    } finally {
-      btn.disabled = false;
-      btnText.textContent = 'Buktikan via ZKP & Reset Password';
-      spinner.style.display = 'none';
-    }
-  });
-
-  // Tombol ke Verifier dari Layar Sukses
-  document.getElementById('btnGoToVerifier').addEventListener('click', () => {
-    showVerifierTab();
-  });
-
-  // Uji Akses Data Vault Terproteksi (Bearer Session Token)
+  // Tombol Uji Otorisasi Vault
   const btnTestVault = document.getElementById('btnTestVaultAccess');
-  const vaultRespBox = document.getElementById('vaultResponseBox');
-  if (btnTestVault && vaultRespBox) {
+  const vaultBox = document.getElementById('vaultResponseBox');
+  if (btnTestVault) {
     btnTestVault.addEventListener('click', async () => {
-      vaultRespBox.style.display = 'block';
-      vaultRespBox.textContent = 'Menghubungi endpoint /api/user/vault...';
-      const token = sessionStorage.getItem('zk2fa_session_token');
-      const backend = await hasBackend();
-
-      if (backend && token) {
-        try {
-          const res = await fetch('/api/user/vault', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const data = await res.json();
-          vaultRespBox.textContent = JSON.stringify(data, null, 2);
-        } catch (e) {
-          vaultRespBox.textContent = 'Error koneksi: ' + e.message;
-        }
-      } else {
-        vaultRespBox.textContent = JSON.stringify({
-          mode: backend ? 'Missing Session Token' : 'Mode Mandiri (WASM Client / GitHub Pages)',
-          status: 'SECURE_VAULT_ACCESSIBLE (SIMULASI)',
-          user: sessionStorage.getItem('zk2fa_session_user') || 'Demo User',
-          notice: 'Bearer session token terverifikasi secara lokal di browser.'
-        }, null, 2);
+      if (!currentSessionToken) {
+        alert('Tidak ada session token aktif.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/user/vault', {
+          headers: { Authorization: `Bearer ${currentSessionToken}` }
+        });
+        const data = await res.json();
+        vaultBox.style.display = 'block';
+        vaultBox.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        vaultBox.style.display = 'block';
+        vaultBox.textContent = 'Error: ' + err.message;
       }
     });
   }
 
-  // Logout Sesi
-  document.getElementById('btnLogout').addEventListener('click', async () => {
-    successCard.style.display = 'none';
-    authCard.style.display = 'block';
-
-    const token = sessionStorage.getItem('zk2fa_session_token');
-    if (token) {
-      const backend = await hasBackend();
-      if (backend) {
-        fetch('/api/auth/logout', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
-        }).catch(() => {});
-      }
-    }
-
-    sessionStorage.removeItem('zk2fa_session_token');
-    sessionStorage.removeItem('zk2fa_session_user');
-    if (vaultRespBox) vaultRespBox.style.display = 'none';
-
-    document.getElementById('loginPassword').value = '';
-    resetSlots('login');
-    const check2fa = document.getElementById('checkEnable2FALogin');
-    const container2fa = document.getElementById('login2faSlotsContainer');
-    if (check2fa) check2fa.checked = false;
-    if (container2fa) container2fa.style.display = 'none';
-    showLoginTab();
-    showStatus('loginStatus', 'info', 'Anda telah keluar. Silakan masukkan username & password untuk masuk kembali.');
-  });
-
-  // ==========================================
-  // 3. VERIFIER (UJI MANDIRI WITNESS • PROOF • VERIFIER)
-  // ==========================================
-  const btnLabGenWitness = document.getElementById('btnLabGenWitness');
-  const btnLabGenProof = document.getElementById('btnLabGenProof');
-  const btnLabTamperProof = document.getElementById('btnLabTamperProof');
-  const btnLabCopyProof = document.getElementById('btnLabCopyProof');
-  const btnLabRunVerify = document.getElementById('btnLabRunVerify');
-
-  const labWitnessOutput = document.getElementById('labWitnessOutput');
-  const labProofOutput = document.getElementById('labProofOutput');
-  const labVerifyOutput = document.getElementById('labVerifyOutput');
-
-  // Tahap A: Hitung Witness dari Foto
-  btnLabGenWitness.addEventListener('click', async () => {
-    const [f1, f2, f3] = state.labFiles;
-    if (!f1 || !f2 || !f3) {
-      alert('Pilih 3 foto pada slot di atas terlebih dahulu.');
-      return;
-    }
-
-    btnLabGenWitness.disabled = true;
-    btnLabGenWitness.textContent = 'Menghitung Saksi...';
-    labWitnessOutput.innerHTML = '<span style="color:#e4e4e7;">Membaca byte foto & menghitung reduksi SHA-256 modulo BN254...</span>';
-
-    try {
-      const [rawH1, rawH2, rawH3] = await Promise.all([
-        hashFileDeterministic(f1),
-        hashFileDeterministic(f2),
-        hashFileDeterministic(f3)
-      ]);
-
-      const rawHashes = [rawH1.fieldElement, rawH2.fieldElement, rawH3.fieldElement];
-      if (hasDuplicateHashes(rawHashes)) {
-        alert('Ketiga foto harus berbeda!');
-        btnLabGenWitness.disabled = false;
-        btnLabGenWitness.textContent = 'Hitung Witness dari Foto';
-        return;
-      }
-
-      // Penyortiran deterministik
-      const [h1, h2, h3] = sortImageFieldElements(rawHashes);
-
-      const commitmentResult = await computeHierarchicalCommitment(
-        h1,
-        h2,
-        h3,
-        state.labSalt.fieldElement
-      );
-      state.labRootCommitment = commitmentResult.rootCommitment;
-
-      const randBytes = crypto.getRandomValues(new Uint8Array(16));
-      const randHex = Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-      const BN254_R = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
-      state.labNonce = (BigInt('0x' + randHex) % BN254_R).toString();
-
-      state.labWitnessInputs = {
-        h1: h1,
-        h2: h2,
-        h3: h3,
-        salt: state.labSalt.fieldElement,
-        rootCommitment: state.labRootCommitment,
-        sessionNonce: state.labNonce
-      };
-
-      labWitnessOutput.textContent = JSON.stringify({
-        status: 'WITNESS_COMPUTED_LOCALLY',
-        sourceFiles: [
-          { slot: 1, name: f1.name, sizeBytes: f1.size, hash_mod_r: h1.fieldElement.slice(0, 16) + '...' },
-          { slot: 2, name: f2.name, sizeBytes: f2.size, hash_mod_r: h2.fieldElement.slice(0, 16) + '...' },
-          { slot: 3, name: f3.name, sizeBytes: f3.size, hash_mod_r: h3.fieldElement.slice(0, 16) + '...' }
-        ],
-        circuitConstraints: '~1.412 R1CS Constraints (WASM)',
-        rootCommitment: state.labRootCommitment.slice(0, 20) + '...',
-        sessionNonce: state.labNonce
-      }, null, 2);
-
-      btnLabGenProof.disabled = false;
-      btnLabGenWitness.textContent = '✓ Hitung Witness dari Foto';
-    } catch (err) {
-      labWitnessOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Witness: ${err.message}</span>`;
-      btnLabGenWitness.disabled = false;
-      btnLabGenWitness.textContent = 'Hitung Witness dari Foto';
-    }
-  });
-
-  // Tahap B: Sintesis Proof
-  btnLabGenProof.addEventListener('click', async () => {
-    if (!state.labWitnessInputs) return;
-
-    btnLabGenProof.disabled = true;
-    btnLabGenProof.textContent = 'Mensintesis Proof...';
-    labProofOutput.innerHTML = '<span style="color:#e4e4e7;">Menghitung bukti Groth16 di WebAssembly BN254 dari foto Anda...</span>';
-
-    try {
-      const res = await generateZkProof(state.labWitnessInputs);
-      if (!res.success) throw new Error(res.error);
-
-      state.labProof = res.proof;
-      state.labPublicSignals = [
-        res.sessionAuthToken,
-        state.labRootCommitment,
-        state.labNonce
-      ];
-
-      labProofOutput.textContent = JSON.stringify({
-        protocol: 'Groth16 zk-SNARK',
-        curve: 'BN254 (alt_bn128)',
-        proofSynthesisDuration: `${res.durationMs} ms`,
-        pi_a: [state.labProof.pi_a[0].slice(0, 14) + '...', state.labProof.pi_a[1].slice(0, 14) + '...'],
-        pi_b: [
-          [state.labProof.pi_b[0][0].slice(0, 12) + '...', state.labProof.pi_b[0][1].slice(0, 12) + '...'],
-          [state.labProof.pi_b[1][0].slice(0, 12) + '...', state.labProof.pi_b[1][1].slice(0, 12) + '...']
-        ],
-        pi_c: [state.labProof.pi_c[0].slice(0, 14) + '...', state.labProof.pi_c[1].slice(0, 14) + '...'],
-        publicSignalsCount: state.labPublicSignals.length
-      }, null, 2);
-
-      btnLabRunVerify.disabled = false;
-      btnLabTamperProof.disabled = false;
-      btnLabCopyProof.disabled = false;
-      btnLabGenProof.textContent = '✓ Sintesis Proof';
-    } catch (err) {
-      labProofOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Proof: ${err.message}</span>`;
-      btnLabGenProof.disabled = false;
-      btnLabGenProof.textContent = 'Sintesis Proof';
-    }
-  });
-
-  // Rusak Bukti (Tamper Proof)
-  btnLabTamperProof.addEventListener('click', () => {
-    if (!state.labProof) return;
-    const orig = state.labProof.pi_a[0];
-    const altered = orig.slice(0, -1) + (orig.slice(-1) === '1' ? '2' : '1');
-    state.labProof.pi_a[0] = altered;
-
-    labProofOutput.innerHTML = `
-<span style="color:#ffffff; font-weight: bold; border-bottom: 1px solid #71717a;">⚠️ BUKTI TELAH DIRUSAK (Tamper Test Aktif):</span>
-Titik pi_a[0] kurva eliptik telah dimodifikasi!
-Sekarang klik "Jalankan Verifier" di bawah untuk membuktikan bahwa verifier akan menolaknya.
-`;
-    btnLabTamperProof.disabled = true;
-    btnLabTamperProof.textContent = '⚠️ Bukti Telah Dirusak';
-  });
-
-  // Salin JSON
-  btnLabCopyProof.addEventListener('click', () => {
-    if (!state.labProof) return;
-    const full = JSON.stringify({ proof: state.labProof, publicSignals: state.labPublicSignals }, null, 2);
-    navigator.clipboard.writeText(full);
-    btnLabCopyProof.textContent = '✓ Disalin';
-    setTimeout(() => { btnLabCopyProof.textContent = 'Salin JSON'; }, 1500);
-  });
-
-  // Tahap C: Verifier
-  btnLabRunVerify.addEventListener('click', async () => {
-    if (!state.labProof || !state.labPublicSignals) return;
-
-    btnLabRunVerify.disabled = true;
-    btnLabRunVerify.textContent = 'Memverifikasi Pairing...';
-    labVerifyOutput.className = 'verifier-result-box';
-    labVerifyOutput.innerHTML = '<span style="color:#e4e4e7;">Mengecek persamaan bilinear pairing e(A,B) = e(alpha,beta) + ...</span>';
-
-    try {
-      if (!state.labVKey) {
-        const vKeyRes = await fetch('./public/zk/verification_key.json').catch(() => fetch('/public/zk/verification_key.json'));
-        state.labVKey = await vKeyRes.json();
-      }
-
-      const verifyStart = performance.now();
-      const isValid = await verifyZkProof(
-        state.labVKey,
-        state.labPublicSignals,
-        state.labProof
-      );
-      const verifyDuration = Math.round(performance.now() - verifyStart);
-
-      if (isValid) {
-        labVerifyOutput.className = 'verifier-result-box verified';
-        labVerifyOutput.innerHTML = `
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color:#ffffff;">✓ PROOF VERIFIED (Valid Secara Matematis)</div>
-          <div style="font-size: 0.8rem; line-height: 1.4; color:#a1a1aa;">
-            • Persamaan Bilinear Pairing Terpenuhi: <code>e(&pi;<sub>A</sub>, &pi;<sub>B</sub>) == e(&alpha;, &beta;) + e(vk<sub>x</sub>, &gamma;) + e(&pi;<sub>C</sub>, &delta;)</code><br>
-            • Waktu verifikasi: <strong style="color:#ffffff;">${verifyDuration} ms</strong><br>
-            • <strong>Zero-Knowledge Terbukti:</strong> Verifier membuktikan kepemilikan 3 foto asli tanpa foto pernah diunggah atau dilihat oleh siapapun!
-          </div>
-        `;
-      } else {
-        labVerifyOutput.className = 'verifier-result-box rejected';
-        labVerifyOutput.innerHTML = `
-          <div style="font-weight: 700; font-size: 0.95rem; margin-bottom: 4px; color:#ffffff;">✕ VERIFICATION FAILED (Bukti Ditolak)</div>
-          <div style="font-size: 0.8rem; line-height: 1.4; color:#a1a1aa;">
-            • Pairing Check Gagal: Nilai bukti matematika tidak memenuhi kurva eliptik BN254.<br>
-            • Waktu verifikasi: <strong style="color:#ffffff;">${verifyDuration} ms</strong><br>
-            • Sistem berhasil menggagalkan manipulasi atau ketidakcocokan kunci!
-          </div>
-        `;
-      }
-
-    } catch (err) {
-      labVerifyOutput.className = 'verifier-result-box rejected';
-      labVerifyOutput.innerHTML = `<span style="color:#ffffff; font-weight:600;">Error Verifikasi: ${err.message}</span>`;
-    } finally {
-      btnLabRunVerify.disabled = false;
-      btnLabRunVerify.textContent = 'Jalankan Verifier';
-    }
-  });
-
+  // Tombol Logout
+  const btnLogout = document.getElementById('btnLogout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', () => {
+      currentSessionToken = null;
+      successCard.style.display = 'none';
+      authCard.style.display = 'block';
+      if (vaultBox) vaultBox.style.display = 'none';
+    });
+  }
 });
