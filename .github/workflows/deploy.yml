@@ -37,6 +37,9 @@ jobs:
       - name: Run Test Suite
         run: npm test
 
+      - name: Build SDK Artifacts
+        run: npm run build:sdk
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
 

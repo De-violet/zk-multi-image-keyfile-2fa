@@ -1,3 +1,5 @@
+import { ZkCanvasSDK } from '../sdk/esm/index.js';
+
 /**
  * Controller Antarmuka ZK-OTP Authenticator
  * Menggunakan ZkCanvasSDK untuk rendering canvas dan kalkulasi proof di Web Worker.
@@ -10,7 +12,7 @@ let currentSessionToken = null;
 async function checkBackendConnection() {
   const dot = document.getElementById('connectionDot');
   const text = document.getElementById('connectionText');
-  if (!dot || !text) return;
+  if (!dot || !text) return false;
 
   try {
     const res = await fetch('/api/health');
@@ -18,14 +20,14 @@ async function checkBackendConnection() {
       dot.style.background = '#22c55e';
       text.style.color = '#ffffff';
       text.textContent = 'Server Online (Express REST API)';
-    } else {
-      throw new Error();
+      return true;
     }
-  } catch {
-    dot.style.background = '#eab308';
-    text.style.color = '#a1a1aa';
-    text.textContent = 'Mode Mandiri (WASM Client / Standalone)';
-  }
+  } catch {}
+
+  dot.style.background = '#eab308';
+  text.style.color = '#a1a1aa';
+  text.textContent = 'Mode Mandiri (WASM Client / Standalone)';
+  return false;
 }
 
 function showStatus(elementId, type, message) {
@@ -49,7 +51,7 @@ function initSdk() {
   const inspectorWindow = document.getElementById('inspectorWindow');
   const inspectorMatrix = document.getElementById('inspectorMatrix');
 
-  if (!canvas || typeof window === 'undefined' || !window.ZkCanvasSDK) return;
+  if (!canvas) return;
 
   if (sdkInstance) {
     sdkInstance.destroy();
@@ -57,11 +59,12 @@ function initSdk() {
 
   const secret = secretInput ? secretInput.value.trim() : '12345678901234567890';
 
-  sdkInstance = new window.ZkCanvasSDK({
+  sdkInstance = new ZkCanvasSDK({
     secret,
     canvas,
     rotationIntervalMs: 60000,
-    workerScriptUrl: '/sdk/workerScript.js'
+    assetBaseUrl: './public/zk/',
+    workerScriptUrl: './sdk/browser/workerScript.js'
   });
 
   sdkInstance.on('tick', ({ remainingMs }) => {
@@ -124,63 +127,85 @@ document.addEventListener('DOMContentLoaded', () => {
     btnAuth.addEventListener('click', async () => {
       const username = (userInput ? userInput.value.trim() : '') || 'demo_user';
       btnAuth.disabled = true;
-      showStatus('totpStatus', 'info', 'Meminta challenge nonce dari server...');
+      showStatus('totpStatus', 'info', 'Menyiapkan challenge nonce...');
 
       try {
-        // 1. Dapatkan Nonce Ephemeral
-        const chalRes = await fetch('/api/auth/visual-challenge', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username })
-        });
-        const chalData = await chalRes.json();
-        if (!chalRes.ok || !chalData.success) {
-          throw new Error(chalData.error || 'Gagal memperoleh challenge nonce.');
+        let serverNonce = null;
+        let isOnline = false;
+
+        try {
+          const chalRes = await fetch('/api/auth/visual-challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username })
+          });
+          if (chalRes.ok) {
+            const chalData = await chalRes.json();
+            if (chalData.success) {
+              serverNonce = chalData.sessionNonce;
+              isOnline = true;
+            }
+          }
+        } catch {
+          // Server tidak tersedia (misal GitHub Pages statis)
         }
 
-        const serverNonce = chalData.sessionNonce;
+        if (!serverNonce) {
+          const randBytes = new Uint8Array(16);
+          crypto.getRandomValues(randBytes);
+          serverNonce = '0x' + Array.from(randBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         showStatus('totpStatus', 'info', 'Menghitung Groth16 Proof di Web Worker...');
 
-        // 2. Kalkulasi ZK Proof via SDK
+        // Memicu Web Worker melalui antarmuka tingkat tinggi SDK
         const proofResult = await sdkInstance.generateProof(serverNonce);
 
-        showStatus('totpStatus', 'info', `Proof selesai (${proofResult.durationMs}ms). Mengirim verifikasi ke server...`);
+        let verifyDuration = 0;
+        let visualKey = proofResult.publicSignals[0];
 
-        // 3. Verifikasi ke Server
-        const verifyRes = await fetch('/api/auth/verify-2fa', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username,
-            sessionNonce: serverNonce,
-            proof: proofResult.proof,
-            publicSignals: proofResult.publicSignals,
-            clientTimeWindow: sdkInstance.getCurrentWindow()
-          })
-        });
+        if (isOnline) {
+          showStatus('totpStatus', 'info', `Proof selesai (${proofResult.durationMs}ms). Memvalidasi ke server...`);
+          const verifyRes = await fetch('/api/auth/verify-2fa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username,
+              sessionNonce: serverNonce,
+              proof: proofResult.proof,
+              publicSignals: proofResult.publicSignals,
+              clientTimeWindow: sdkInstance.getCurrentWindow()
+            })
+          });
 
-        const verifyData = await verifyRes.json();
-        if (!verifyRes.ok || !verifyData.success) {
-          throw new Error(verifyData.error || 'Verifikasi server gagal.');
+          const verifyData = await verifyRes.json();
+          if (!verifyRes.ok || !verifyData.success) {
+            throw new Error(verifyData.error || 'Verifikasi server gagal.');
+          }
+          currentSessionToken = verifyData.sessionToken;
+          verifyDuration = verifyData.verificationDurationMs || 0;
+          if (verifyData.visualKey) visualKey = verifyData.visualKey;
         }
 
-        // Simpan sesi dan tampilkan layar sukses
-        currentSessionToken = verifyData.sessionToken;
+        // Tampilkan kartu sukses
         authCard.style.display = 'none';
         successCard.style.display = 'block';
 
         document.getElementById('loggedInUser').textContent = username;
-        document.getElementById('verifyVisualKey').textContent = verifyData.visualKey || proofResult.publicSignals[0];
-        document.getElementById('verifyTime').textContent = `${proofResult.durationMs}ms (Proof) + ${verifyData.verificationDurationMs || 0}ms (Server)`;
+        document.getElementById('verifyVisualKey').textContent = visualKey;
+        document.getElementById('verifyTime').textContent = isOnline
+          ? `${proofResult.durationMs}ms (Proof) + ${verifyDuration}ms (Server)`
+          : `${proofResult.durationMs}ms (Proof Klien Mandiri)`;
 
         const receiptEl = document.getElementById('loginProofReceipt');
         if (receiptEl) {
           receiptEl.textContent = JSON.stringify({
             protocol: proofResult.proof.protocol,
             curve: proofResult.proof.curve,
+            challenge: serverNonce,
             publicSignals: proofResult.publicSignals,
             pi_a: proofResult.proof.pi_a,
-            serverVerified: true
+            mode: isOnline ? 'Server-Verified (Express REST)' : 'Client-Side Standalone (SnarkJS WASM)'
           }, null, 2);
         }
 

@@ -95,7 +95,11 @@ fs.copyFileSync(
   path.join(distBrowser, 'workerScript.js')
 );
 
+// Salin langsung ke client/sdk agar demo dapat mengimpor dari build SDK
+const clientSdkDir = path.resolve(sdkRoot, '../client/sdk');
+copyDirRecursive(path.join(sdkRoot, 'dist'), clientSdkDir);
+
 console.log('✓ Build Multi-Target Selesai:');
-console.log('  - ESM: sdk/dist/esm/index.js');
+console.log('  - ESM: sdk/dist/esm/index.js (dan client/sdk/esm/index.js)');
 console.log('  - Standalone: sdk/dist/browser/zk-canvas-sdk.js');
 console.log('  - Worker: sdk/dist/browser/workerScript.js');
