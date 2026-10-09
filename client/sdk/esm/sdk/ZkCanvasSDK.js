@@ -34,9 +34,14 @@ export class ZkCanvasSDK {
     this.intervalMs = Math.max(1000, config.rotationIntervalMs || 45000);
     this.assetBaseUrl = (config.assetBaseUrl || '/zk/').replace(/\/?$/, '/');
 
-    // Asset URLs
-    const wasmUrl = config.wasmUrl || `${this.assetBaseUrl}VisualTOTP.wasm`;
-    const zkeyUrl = config.zkeyUrl || `${this.assetBaseUrl}VisualTOTP_final.zkey`;
+    // Resolve URL relatif menjadi absolut agar Web Worker tidak salah resolve
+    const toAbsolute = (url) => {
+      if (!url || url.startsWith('http') || url.startsWith('/') || url.startsWith('file:')) return url;
+      try { return new URL(url, globalThis.location?.href).href; }
+      catch { return url; }
+    };
+    const wasmUrl = toAbsolute(config.wasmUrl || `${this.assetBaseUrl}VisualTOTP.wasm`);
+    const zkeyUrl = toAbsolute(config.zkeyUrl || `${this.assetBaseUrl}VisualTOTP_final.zkey`);
     const workerScriptUrl = config.workerScriptUrl || '/sdk/workerScript.js';
 
     // 1. Inisialisasi Event Emitter
