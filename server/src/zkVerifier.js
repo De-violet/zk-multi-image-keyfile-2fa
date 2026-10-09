@@ -7,25 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Lokasi berkas verification key
-const VKEY_PATH = path.join(__dirname, '../../circuits/build/verification_key.json');
 const VISUAL_VKEY_PATH = path.join(__dirname, '../../circuits/build/VisualTOTP_vkey.json');
+const CLIENT_VISUAL_VKEY_PATH = path.join(__dirname, '../../client/public/zk/VisualTOTP_vkey.json');
 
-let vKey = null;
 let visualVKey = null;
-
-function loadVerificationKey() {
-  if (!vKey) {
-    if (!fs.existsSync(VKEY_PATH)) {
-      throw new Error(`Verification key tidak ditemukan di ${VKEY_PATH}. Pastikan sirkuit sudah dikompilasi (npm run compile:circuit).`);
-    }
-    vKey = JSON.parse(fs.readFileSync(VKEY_PATH, 'utf-8'));
-  }
-  return vKey;
-}
 
 export function loadVisualVerificationKey() {
   if (!visualVKey) {
-    const target = fs.existsSync(VISUAL_VKEY_PATH) ? VISUAL_VKEY_PATH : VKEY_PATH;
+    const target = fs.existsSync(VISUAL_VKEY_PATH) ? VISUAL_VKEY_PATH : CLIENT_VISUAL_VKEY_PATH;
     if (!fs.existsSync(target)) {
       throw new Error(`Visual verification key tidak ditemukan di ${target}.`);
     }

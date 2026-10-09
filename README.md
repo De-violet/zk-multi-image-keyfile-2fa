@@ -115,7 +115,7 @@ Akses antarmuka web melalui peramban di:
 
 ## Pengujian Otomatis (Test Suite)
 
-Repositori menggunakan test runner bawaan Node.js (`node:test`). Seluruh 62 pengujian mencakup sirkuit, kriptografi hash, end-to-end otentikasi, smart contract, SDK, canvas renderer, CORS/CORP header, dan endpoint verifikasi visual OTP.
+Repositori menggunakan test runner bawaan Node.js (`node:test`). Seluruh 33 pengujian mencakup sirkuit Visual TOTP, SDK, canvas renderer, CORS/CORP header, dan endpoint verifikasi visual OTP.
 
 Jalankan seluruh pengujian:
 ```bash
@@ -124,30 +124,18 @@ npm test
 
 Jalankan pengujian per modul:
 ```bash
-# Uji sirkuit Groth16 dan zero-noise tolerance
-npm run test:circuit
-
-# Uji hash deterministik, salt, dan Poseidon
-npm run test:hash
-
-# Uji siklus otentikasi end-to-end dan rate limiting
-npm run test:e2e
-
-# Uji kompilasi smart contract Solidity via solc
-npm run test:solidity
-
 # Uji spesifik Visual TOTP (Canvas, Worker, CORS, Nonce Burning, Drift)
-node --test tests/visualTotp.test.js
+npm run test:visual
 
-# Uji integrasi ZK Canvas SDK
-node --test tests/sdkIntegration.test.js
+# Uji integrasi dan unit ZK Canvas SDK
+npm run test:sdk
 ```
 
 ---
 
 ## Kompilasi Ulang Sirkuit Circom (Opsional)
 
-Jika Anda memodifikasi berkas sirkuit di `circuits/`, jalankan skrip kompilasi dan pembuatan proving key:
+Jika Anda memodifikasi berkas sirkuit di `circuits/VisualTOTP.circom`, jalankan skrip kompilasi dan pembuatan proving key:
 ```bash
 npm run compile:circuit
 ```
@@ -155,8 +143,8 @@ npm run compile:circuit
 Skrip ini akan:
 1. Mengompilasi sirkuit Circom menjadi constraint R1CS dan modul WASM.
 2. Menghasilkan kontribusi Powers of Tau kurva BN254.
-3. Melakukan fase kedua Groth16 untuk menghasilkan `circuit_final.zkey` dan `VisualTOTP_final.zkey`.
-4. Mengekspor berkas verifikasi `verification_key.json` dan contract Solidity verifier.
+3. Melakukan fase kedua Groth16 untuk menghasilkan `VisualTOTP_final.zkey`.
+4. Mengekspor berkas verifikasi `VisualTOTP_vkey.json`.
 5. Menyinkronkan seluruh artefak build ke folder `client/public/zk/`.
 
 ---
@@ -165,42 +153,35 @@ Skrip ini akan:
 
 ```text
 circuits/
-  MultiImageKeyfile2FA.circom   Sirkuit 2FA 3 foto
   VisualTOTP.circom             Sirkuit 2FA Visual TOTP dinamis
   build/                        Artefak kompilasi (WASM, zkey, vkey)
   scripts/compile.sh            Skrip otomatisasi kompilasi sirkuit
 client/
-  index.html                    Antarmuka pengguna (Register, Login, Verifier, Visual TOTP)
+  index.html                    Antarmuka pengguna (Visual TOTP ZK Prover)
   src/
     main.js                     Logika antarmuka klien
     visualTotpCanvas.js         Generator matriks dan renderer canvas
     zkClientService.js          Layanan komunikasi Web Worker
-    crypto/                     Fungsi hash deterministik dan Poseidon
+    crypto/                     Fungsi visual pattern generator
     ui/matrixRenderer.js        Komponen renderer grid 8x8
   public/
     workers/zkWorker.js         Web Worker SnarkJS
-    vendor/                     Pustaka snarkjs dan poseidon browser
-    zk/                         Artefak sirkuit untuk browser
-contracts/
-  MultiImage2FAVault.sol        Smart contract vault otentikasi on-chain
-  MultiImageVerifier.sol        Smart contract verifier Groth16
+    vendor/                     Pustaka snarkjs browser
+    zk/                         Artefak sirkuit untuk browser (WASM, zkey, vkey)
 sdk/
   src/                          TypeScript/ESM library ZK Canvas SDK
 server/
   src/
     app.js                      Server Express, CORS/CORP header, dan routing
-    authController.js           Controller registrasi, login, dan verifikasi 2FA/Visual TOTP
+    authController.js           Controller verifikasi Visual TOTP & challenge
     nonceManager.js             Pengelola challenge nonce dan single-use burning ledger
     zkVerifier.js               Verifikasi Groth16 server-side
     rateLimiter.js              Pembatas laju permintaan IP
 tests/
-  circuit.test.js               Pengujian sirkuit Groth16
-  hash.test.js                  Pengujian fungsi hash dan komitmen
-  e2e.test.js                   Pengujian siklus otentikasi server
   visualTotp.test.js            Pengujian visual OTP, canvas, CORS, drift, dan nonce burn
   sdk.test.js                   Pengujian unit SDK
   sdkIntegration.test.js        Pengujian integrasi SDK
-  solidity.test.js              Pengujian smart contract
+  helpers/                      Helper mock worker bridge untuk testing
 ```
 
 ---

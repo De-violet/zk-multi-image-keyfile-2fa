@@ -6,16 +6,12 @@
   "type": "module",
   "scripts": {
     "compile:circuit": "bash circuits/scripts/compile.sh",
-    "compile:contracts": "hardhat compile",
-    "deploy:contracts": "node scripts/deploy.js",
     "download:ptau": "bash circuits/scripts/download_ptau.sh",
     "start": "node --env-file-if-exists=.env server/src/app.js",
     "dev": "node --env-file-if-exists=.env server/src/app.js",
     "test": "node --test --test-concurrency=1 tests/*.test.js",
-    "test:circuit": "node --test tests/circuit.test.js",
-    "test:hash": "node --test tests/hash.test.js",
-    "test:e2e": "node --test tests/e2e.test.js",
-    "test:solidity": "node --test tests/solidity.test.js"
+    "test:visual": "node --test tests/visualTotp.test.js",
+    "test:sdk": "node --test tests/sdk.test.js tests/sdkIntegration.test.js"
   },
   "keywords": [
     "zero-knowledge",
@@ -25,7 +21,8 @@
     "poseidon",
     "2fa",
     "snarkjs",
-    "keyfile"
+    "totp",
+    "visual-otp"
   ],
   "author": "Antigravity",
   "license": "MIT",
@@ -35,10 +32,5 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "snarkjs": "^0.7.5"
-  },
-  "devDependencies": {
-    "@openzeppelin/contracts": "^5.6.1",
-    "hardhat": "^3.18.1",
-    "solc": "^0.8.37"
   }
 }
