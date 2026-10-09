@@ -232,4 +232,189 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
     });
     assert.equal(resNonceMismatch.valid, false, 'Mismatch serverNonce harus ditolak.');
   });
+
+  await t.test('8. Rendering Canvas: MatrixRenderer & renderVisualMatrix (64 sel, palet warna, isolasi DOM)', async () => {
+    const { MatrixRenderer } = await import('../client/src/ui/matrixRenderer.js');
+    const { renderVisualMatrix } = await import('../client/src/visualTotpCanvas.js');
+    const { generateVisualPattern } = await import('../client/src/crypto/visualGenerator.js');
+
+    const drawCalls = [];
+    const mockCtx = {
+      clearRect(x, y, w, h) { drawCalls.push({ type: 'clearRect', x, y, w, h }); },
+      fillRect(x, y, w, h) { drawCalls.push({ type: 'fillRect', x, y, w, h }); },
+      strokeRect(x, y, w, h) { drawCalls.push({ type: 'strokeRect', x, y, w, h }); }
+    };
+    const mockCanvas = {
+      width: 200,
+      height: 200,
+      getContext: () => mockCtx
+    };
+
+    // MatrixRenderer
+    const renderer = new MatrixRenderer(mockCanvas);
+    const pattern = generateVisualPattern('0x1234567890abcdef');
+    renderer.drawMatrix(pattern.cells, pattern.palette);
+
+    const fillCalls = drawCalls.filter((c) => c.type === 'fillRect');
+    const clearCalls = drawCalls.filter((c) => c.type === 'clearRect');
+    assert.equal(clearCalls.length, 1, 'Canvas harus dibersihkan sebelum merender');
+    assert.equal(fillCalls.length, 64, 'Grid 8x8 harus merender tepat 64 sel');
+
+    // renderVisualMatrix
+    drawCalls.length = 0;
+    renderVisualMatrix(mockCanvas, '12345678901234567890');
+    const fillCallsDirect = drawCalls.filter((c) => c.type === 'fillRect');
+    assert.equal(fillCallsDirect.length, 64, 'renderVisualMatrix harus merender tepat 64 sel');
+  });
+
+  await t.test('9. CORS & CORP: Web Worker memuat WASM dan ZKey tanpa kendala', async () => {
+    const { default: app } = await import('../server/src/app.js');
+    const server = app.listen(0);
+    const port = server.address().port;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      // 1. GET /zk/VisualTOTP.wasm dengan Origin cross-origin
+      const wasmRes = await fetch(`${baseUrl}/zk/VisualTOTP.wasm`, {
+        headers: { Origin: 'http://client-origin.test' }
+      });
+      assert.equal(wasmRes.status, 200);
+      assert.equal(wasmRes.headers.get('access-control-allow-origin'), '*');
+      assert.equal(wasmRes.headers.get('cross-origin-resource-policy'), 'cross-origin');
+      const wasmBuf = await wasmRes.arrayBuffer();
+      assert.ok(wasmBuf.byteLength > 0, 'Buffer WASM harus berhasil diunduh');
+
+      // 2. GET /zk/VisualTOTP_final.zkey dengan Origin cross-origin
+      const zkeyRes = await fetch(`${baseUrl}/zk/VisualTOTP_final.zkey`, {
+        headers: { Origin: 'http://client-origin.test' }
+      });
+      assert.equal(zkeyRes.status, 200);
+      assert.equal(zkeyRes.headers.get('access-control-allow-origin'), '*');
+      assert.equal(zkeyRes.headers.get('cross-origin-resource-policy'), 'cross-origin');
+      const zkeyBuf = await zkeyRes.arrayBuffer();
+      assert.ok(zkeyBuf.byteLength > 0, 'Buffer ZKey harus berhasil diunduh');
+
+      // 3. Preflight OPTIONS request untuk artefak ZK
+      const optRes = await fetch(`${baseUrl}/zk/VisualTOTP.wasm`, {
+        method: 'OPTIONS',
+        headers: {
+          Origin: 'http://client-origin.test',
+          'Access-Control-Request-Method': 'GET'
+        }
+      });
+      assert.equal(optRes.status, 204);
+      assert.equal(optRes.headers.get('access-control-allow-origin'), '*');
+      assert.equal(optRes.headers.get('cross-origin-resource-policy'), 'cross-origin');
+    } finally {
+      server.close();
+    }
+  });
+
+  await t.test('10. Endpoint Verifikasi Server: Kunci Visual OTP, Toleransi Jendela Waktu & Pembakaran Nonce Sekali Pakai', async () => {
+    const { default: app } = await import('../server/src/app.js');
+    const server = app.listen(0);
+    const port = server.address().port;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      // 1. Dapatkan ephemeral challenge nonce
+      const chalRes = await fetch(`${baseUrl}/api/auth/visual-challenge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'demo_user' })
+      });
+      assert.equal(chalRes.status, 200);
+      const chalData = await chalRes.json();
+      assert.ok(chalData.sessionNonce);
+      const serverNonce = chalData.sessionNonce;
+      const curWindow = chalData.timeWindow;
+
+      // 2. Buat ZK Proof valid
+      const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+        {
+          masterSecret,
+          timeWindow: curWindow.toString(),
+          serverNonce
+        },
+        WASM_PATH,
+        ZKEY_PATH
+      );
+
+      // 3. Endpoint membaca kunci visual OTP dan verifikasi sukses
+      const verifyRes = await fetch(`${baseUrl}/api/auth/verify-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'demo_user',
+          sessionNonce: serverNonce,
+          proof,
+          publicSignals,
+          clientTimeWindow: curWindow
+        })
+      });
+      assert.equal(verifyRes.status, 200);
+      const verifyData = await verifyRes.json();
+      assert.equal(verifyData.success, true);
+      assert.equal(verifyData.visualKey, publicSignals[0], 'Endpoint harus membaca kunci visual OTP (imageCommitment)');
+      assert.ok(verifyData.sessionToken);
+
+      // 4. Pembakaran Nonce Sekali Pakai (Replay Attack Ditolak)
+      const replayRes = await fetch(`${baseUrl}/api/auth/verify-2fa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'demo_user',
+          sessionNonce: serverNonce,
+          proof,
+          publicSignals,
+          clientTimeWindow: curWindow
+        })
+      });
+      assert.equal(replayRes.status, 401, 'Percobaan verifikasi dengan nonce yang sama harus ditolak');
+      const replayData = await replayRes.json();
+      assert.match(replayData.error, /replay|burned|not found/i);
+
+      // 5. Toleransi Jendela Waktu (±1 siklus diterima, > 1 siklus ditolak)
+      const driftChalRes = await fetch(`${baseUrl}/api/auth/visual-challenge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'demo_user' })
+      });
+      const driftChalData = await driftChalRes.json();
+      const driftNonce = driftChalData.sessionNonce;
+
+      // Proof dengan drift waktu melebihi toleransi (> ±1 window)
+      const excessiveDriftWindow = curWindow + 3;
+      const { proof: driftProof, publicSignals: driftSignals } = await snarkjs.groth16.fullProve(
+        {
+          masterSecret,
+          timeWindow: excessiveDriftWindow.toString(),
+          serverNonce: driftNonce
+        },
+        WASM_PATH,
+        ZKEY_PATH
+      );
+
+      const driftRes = await fetch(`${baseUrl}/api/auth/verify-visual-totp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'demo_user',
+          nonce: driftNonce,
+          proof: driftProof,
+          publicSignals: driftSignals,
+          clientTimeWindow: excessiveDriftWindow
+        })
+      });
+      assert.equal(driftRes.status, 401, 'Time drift melebihi batas ±1 siklus harus ditolak');
+      const driftErrData = await driftRes.json();
+      assert.match(driftErrData.error, /drift/i);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+test.after(() => {
+  setTimeout(() => process.exit(0), 300).unref();
 });

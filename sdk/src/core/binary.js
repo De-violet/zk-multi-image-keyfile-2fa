@@ -34,7 +34,9 @@ export function normalizeToBytes32(input) {
       const encoder = new TextEncoder();
       const raw = encoder.encode(trimmed);
       const buf = new Uint8Array(32);
-      buf.set(raw.slice(0, 32));
+      for (let i = 0; i < raw.length; i++) {
+        buf[i % 32] ^= raw[i];
+      }
       return buf;
     }
   } else {

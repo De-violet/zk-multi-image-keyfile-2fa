@@ -61,6 +61,7 @@ export class ZkCanvasSDK {
     this.currentMatrix = null;
     this.timerId = null;
     this.active = false;
+    this.destroyed = false;
   }
 
   /**
@@ -68,6 +69,9 @@ export class ZkCanvasSDK {
    * @returns {Promise<void>}
    */
   async start() {
+    if (this.destroyed) {
+      throw new Error('ZkCanvasSDK telah di-destroy dan tidak dapat dijalankan kembali.');
+    }
     if (this.active) return;
     this.active = true;
 
@@ -130,7 +134,10 @@ export class ZkCanvasSDK {
    * @returns {Promise<{ proof: object, publicSignals: string[], durationMs: number }>}
    */
   async generateProof(challenge) {
-    if (!challenge) {
+    if (this.destroyed) {
+      throw new Error('ZkCanvasSDK telah di-destroy dan tidak dapat menghasilkan proof.');
+    }
+    if (!challenge || (typeof challenge === 'string' && challenge.trim() === '')) {
       throw new Error('ZkCanvasSDK: Parameter "challenge" wajib disertakan untuk generateProof.');
     }
 
@@ -180,6 +187,7 @@ export class ZkCanvasSDK {
    */
   destroy() {
     this.stop();
+    this.destroyed = true;
     if (this.renderer) {
       this.renderer.clear();
     }
@@ -187,6 +195,14 @@ export class ZkCanvasSDK {
     this.events.removeAllListeners();
     this.currentMatrix = null;
     this.activeWindow = null;
+  }
+
+  /**
+   * Memeriksa apakah SDK telah di-destroy.
+   * @returns {boolean}
+   */
+  isDestroyed() {
+    return this.destroyed;
   }
 
   /**

@@ -119,8 +119,9 @@ export class WorkerClient {
     }
     this.pendingRequests.clear();
 
-    if (this.worker && typeof this.worker.terminate === 'function') {
-      this.worker.terminate();
+    const target = this.worker || this.customWorker;
+    if (target && typeof target.terminate === 'function') {
+      target.terminate();
     }
     this.worker = null;
   }
