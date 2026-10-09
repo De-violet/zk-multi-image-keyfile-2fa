@@ -18,7 +18,7 @@ const VKEY_PATH = path.resolve(__dirname, '../circuits/build/VisualTOTP_vkey.jso
 
 test('Visual TOTP End-to-End Pipeline', async (t) => {
   const masterSecret = '12345678901234567890';
-  const timeWindow = Math.floor(Date.now() / 1000 / 45);
+  const timeWindow = Math.floor(Date.now() / 1000 / 35);
   const nonce = issueVisualNonce('session-test-1');
 
   await t.test('1. Menghasilkan ZK Proof yang valid', async () => {

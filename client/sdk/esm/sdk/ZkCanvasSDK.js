@@ -31,7 +31,7 @@ export class ZkCanvasSDK {
 
     this.secret = config.secret;
     this.canvas = config.canvas || null;
-    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 45000);
+    this.intervalMs = Math.max(1000, config.rotationIntervalMs || 35000);
     this.assetBaseUrl = (config.assetBaseUrl || '/zk/').replace(/\/?$/, '/');
 
     // Resolve URL relatif menjadi absolut agar Web Worker tidak salah resolve

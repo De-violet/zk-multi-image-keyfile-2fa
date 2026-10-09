@@ -13,10 +13,10 @@ export const visualNonceStore = new Map();
 /**
  * Menghasilkan challenge nonce unik untuk sesi klien.
  * @param {string} sessionId
- * @param {number} ttlMs (default: 45 detik)
+ * @param {number} ttlMs (default: 35 detik)
  * @returns {string}
  */
-export function issueVisualNonce(sessionId, ttlMs = 45000) {
+export function issueVisualNonce(sessionId, ttlMs = 35000) {
   // Field element BN128 representasi angka bulat
   const rawBytes = crypto.randomBytes(16);
   const nonce = BigInt('0x' + rawBytes.toString('hex')).toString();
@@ -49,10 +49,10 @@ export function loadVerificationKey(customPath = null) {
  * Middleware Express untuk memvalidasi proof ZK Visual TOTP.
  * @param {object} options
  * @param {string} [options.vKeyPath]
- * @param {number} [options.intervalSec] (default: 45 detik)
+ * @param {number} [options.intervalSec] (default: 35 detik)
  */
 export function visualTotpMiddleware(options = {}) {
-  const { vKeyPath = null, intervalSec = 45 } = options;
+  const { vKeyPath = null, intervalSec = 35 } = options;
 
   return async (req, res, next) => {
     try {

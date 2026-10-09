@@ -38,7 +38,7 @@ export async function verifyVisualTotpProof({
   publicSignals,
   clientTimeWindow,
   sessionNonce,
-  intervalSec = 45
+  intervalSec = 35
 }) {
   const startTime = performance.now();
   try {

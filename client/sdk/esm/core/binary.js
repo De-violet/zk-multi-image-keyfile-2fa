@@ -30,12 +30,20 @@ export function normalizeToBytes32(input) {
     } else if (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length <= 64) {
       hex = trimmed;
     } else {
-      // String teks UTF-8 sembarang: hashing sederhana / direct bytes
+      // String teks UTF-8 sembarang: hashing sponge dengan efek avalanche 32-byte penuh
       const encoder = new TextEncoder();
       const raw = encoder.encode(trimmed);
       const buf = new Uint8Array(32);
+      let h = 0x811c9dc5;
       for (let i = 0; i < raw.length; i++) {
-        buf[i % 32] ^= raw[i];
+        h = Math.imul(h ^ raw[i], 0x01000193);
+        h = (h << 13) | (h >>> 19);
+      }
+      for (let i = 0; i < 32; i++) {
+        h = Math.imul(h ^ (i * 31 + 7), 0x5bd1e995);
+        h ^= h >>> 13;
+        h = Math.imul(h, 0x1b873593);
+        buf[i] = ((h >>> ((i % 4) * 8)) ^ h) & 0xff;
       }
       return buf;
     }
