@@ -131,7 +131,10 @@
               </div>
 
               <div class="form-group" style="width: 100%;">
-                <label for="totpMasterSecret" style="font-size: 0.8rem;">Master Secret Klien</label>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                  <label for="totpMasterSecret" style="font-size: 0.8rem; margin-bottom: 0;">Master Secret Klien</label>
+                  <button type="button" id="btnRngSecret" class="btn-secondary" style="padding: 2px 8px; font-size: 0.72rem; cursor: pointer;">🎲 Acak Secret (RNG)</button>
+                </div>
                 <input type="password" id="totpMasterSecret" placeholder="Kunci rahasia" value="12345678901234567890">
               </div>
 
