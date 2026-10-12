@@ -18,4 +18,5 @@ export {
 } from './zkVerifier.js';
 
 export { createRateLimiter } from './rateLimiter.js';
+export { createZkAuthRouter } from './router.js';
 export { calculateTimeWindow, calculateRemainingMs, calculateNextWindowTimestamp } from '../../sdk/src/core/timeWindow.js';

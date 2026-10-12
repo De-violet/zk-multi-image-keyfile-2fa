@@ -1,191 +1,257 @@
-# Zero-Knowledge Multi-Image Keyfile 2FA
+# Zero-Knowledge Multi-Image Keyfile 2FA & Visual TOTP
 
-Sistem Otentikasi dan Pemulihan Akun berbasis Zero-Knowledge Proofs (Groth16 zk-SNARKs dan Circom 2.0) menggunakan kombinasi berkas gambar pribadi (Keyfile 2FA) dan Visual TOTP dinamis.
+[![Tests](https://github.com/De-violet/zk-multi-image-keyfile-2fa/actions/workflows/deploy.yml/badge.svg)](https://github.com/De-violet/zk-multi-image-keyfile-2fa/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![ZK Protocol](https://img.shields.io/badge/ZK-Groth16%20BN128-purple.svg)](circuits/VisualTOTP.circom)
 
-Seluruh pemrosesan bukti kriptografi dieksekusi secara lokal di sisi klien menggunakan WebAssembly dan Web Worker. Kunci privat dan foto tidak pernah dikirim ke server. Server hanya menerima dan memverifikasi bukti matematika tanpa mengetahui data rahasia.
+Sistem Otentikasi dan Pemulihan Akun terdesentralisasi berbasis **Zero-Knowledge Proofs (Groth16 zk-SNARKs & Circom 2.0)** dengan faktor kedua berupa **Visual TOTP Dinamis (Siklus 35 Detik)**.
 
----
+Kunci rahasia diproses secara 100% lokal di sisi peramban (WebAssembly & Web Worker). Server hanya memvalidasi keabsahan matematis dari bukti zero-knowledge tanpa pernah menerima, melihat, atau menyimpan kunci rahasia pengguna.
 
-## Arsitektur Visual OTP
-
-Visual TOTP adalah mekanisme otentikasi faktor kedua berbasis waktu yang merender pola visual deterministik 8x8 pada elemen HTML Canvas dan membuktikan validitasnya ke server melalui ZK-SNARKs.
-
-```
-+-------------------------------------------------------------------+
-|                        CLIENT (Browser)                           |
-|                                                                   |
-|  [Master Secret] + [Time Window (t)]                              |
-|           |                                                       |
-|           v                                                       |
-|  Poseidon Hash -> Seed Komitmen                                   |
-|           |                                                       |
-|           +---> Bit-packing (2x8-bit) -> 4-bit Nibble Mapping      |
-|           |         |                                             |
-|           |         v                                             |
-|           |     [Canvas Renderer] (Grid 8x8, 16 Palet Warna)      |
-|           |                                                       |
-|           v                                                       |
-|  [Web Worker: SnarkJS Groth16]                                    |
-|      Input: masterSecret, timeWindow, serverNonce                 |
-|      Aset:  VisualTOTP.wasm, VisualTOTP_final.zkey (via CORS)     |
-|      Output: Proof + Public Signals                               |
-+-------------------------------------------------------------------+
-                                |
-                   POST /api/auth/verify-2fa
-                                |
-+-------------------------------------------------------------------+
-|                        SERVER (Node.js)                           |
-|                                                                   |
-|  1. Baca parameter: proof, publicSignals, nonce, timeWindow       |
-|  2. Single-Use Nonce Burning (Anti-Replay Ledger)                |
-|  3. Validasi Time Drift (+-1 siklus interval 60s)                 |
-|  4. Verifikasi Pairing Kriptografi Groth16                        |
-|  5. Baca kunci visual OTP (imageCommitment) & Terbitkan Sesi      |
-+-------------------------------------------------------------------+
-```
-
-### 1. Representasi Visual dan Rendering Canvas
-- Seed komitmen diturunkan dari hash Poseidon antara masterSecret dan timeWindow.
-- Data biner dinormalisasi ke 32-byte (256-bit) dan diurai menjadi 16 pasangan kata 16-bit (2x8-bit).
-- Setiap kata diekstraksi menjadi nilai 4-bit (rentang 0-15) yang memetakan warna pada 16 palet warna baku (`VISUAL_PALETTE_16`).
-- CanvasRenderer menggambar 64 sel (grid 8x8) menggunakan `fillRect` secara efisien tanpa manipulasi DOM berlebih.
-
-### 2. Komputasi Proof di Web Worker
-- Sintesis bukti Groth16 dijalankan di background thread (`client/public/workers/zkWorker.js`) agar antarmuka pengguna tidak mengalami freeze.
-- Web Worker memuat artefak `VisualTOTP.wasm` dan `VisualTOTP_final.zkey` melalui fetch HTTP.
-- Server Express dikonfigurasi dengan header CORS (`Access-Control-Allow-Origin: *`) dan `Cross-Origin-Resource-Policy: cross-origin` sehingga berkas WASM dan ZKey dapat dimuat oleh Web Worker tanpa hambatan isolasi lintas-origin (Cross-Origin Isolation / COEP / CORP).
-
-### 3. Logika Sirkuit Circom (VisualTOTP.circom)
-- Input Privat: `masterSecret`
-- Input Publik: `timeWindow` (indeks interval 60 detik), `serverNonce` (challenge acak sekali pakai)
-- Output Publik:
-  - `imageCommitment` = Poseidon(masterSecret, timeWindow) (kunci visual OTP aktif)
-  - `sessionAuthToken` = Poseidon(imageCommitment, serverNonce)
-
-### 4. Verifikasi Server, Toleransi Waktu, dan Pembakaran Nonce
-- Permintaan tantangan: Klien memanggil `/api/auth/visual-challenge` untuk mendapatkan ephemeral `sessionNonce` dan `timeWindow` server.
-- Pembakaran Nonce Sekali Pakai (Single-Use Nonce Burning): Saat verifikasi diterima di `/api/auth/verify-2fa` atau `/api/auth/verify-visual-totp`, server memeriksa status nonce di `nonceManager`. Nonce yang valid langsung dihapus dari daftar aktif dan dimasukkan ke dalam ledger nonce terbakar. Percobaan verifikasi kedua dengan nonce yang sama langsung ditolak (perlindungan terhadap replay attack).
-- Toleransi Jendela Waktu (Time Window Drift Tolerance): Server membandingkan `clientTimeWindow` terhadap jendela waktu server saat ini. Selisih hingga +-1 siklus (drift +-60 detik) ditoleransi untuk mengantisipasi perbedaan jam perangkat klien, sedangkan selisih lebih dari 1 siklus langsung ditolak.
-- Pembacaan Kunci Visual OTP: Endpoint membaca `publicSignals[0]` sebagai kunci komitmen visual OTP dan mengonfirmasi konsistensi parameter sebelum menerbitkan token sesi akses.
+Demo Langsung: [https://de-violet.github.io/zk-multi-image-keyfile-2fa/](https://de-violet.github.io/zk-multi-image-keyfile-2fa/)
 
 ---
 
-## Panduan Instalasi dan Menjalankan Proyek
+## Arsitektur Modular
 
-### 1. Prasyarat Sistem
-- Node.js versi >= 18.0.0 (direkomendasikan versi 20 LTS)
-- NPM versi >= 9.0.0
-- Git
-
-### 2. Kloning Repositori
-```bash
-git clone https://github.com/De-violet/zk-multi-image-keyfile-2fa.git
-cd "Zero-Knowledge Multi-Image Keyfile 2FA"
-```
-
-### 3. Instalasi Dependensi
-Pasang paket dependensi yang dibutuhkan (circomlib, snarkjs, express, cors, hardhat):
-```bash
-npm install
-```
-
-### 4. Konfigurasi Lingkungan (.env)
-Salin contoh konfigurasi ke berkas `.env`:
-```bash
-cp .env.example .env
-```
-Variabel default:
-- `PORT=3000`
-- `NODE_ENV=development`
-- `DEMO_MODE=true`
-
-### 5. Menjalankan Server Lokal
-Jalankan server aplikasi:
-```bash
-npm start
-```
-Untuk mode pengembangan dengan pemuatan otomatis:
-```bash
-npm run dev
-```
-Akses antarmuka web melalui peramban di:
-`http://localhost:3000`
-
----
-
-## Pengujian Otomatis (Test Suite)
-
-Repositori menggunakan test runner bawaan Node.js (`node:test`). Seluruh 33 pengujian mencakup sirkuit Visual TOTP, SDK, canvas renderer, CORS/CORP header, dan endpoint verifikasi visual OTP.
-
-Jalankan seluruh pengujian:
-```bash
-npm test
-```
-
-Jalankan pengujian per modul:
-```bash
-# Uji spesifik Visual TOTP (Canvas, Worker, CORS, Nonce Burning, Drift)
-npm run test:visual
-
-# Uji integrasi dan unit ZK Canvas SDK
-npm run test:sdk
-```
-
----
-
-## Kompilasi Ulang Sirkuit Circom (Opsional)
-
-Jika Anda memodifikasi berkas sirkuit di `circuits/VisualTOTP.circom`, jalankan skrip kompilasi dan pembuatan proving key:
-```bash
-npm run compile:circuit
-```
-
-Skrip ini akan:
-1. Mengompilasi sirkuit Circom menjadi constraint R1CS dan modul WASM.
-2. Menghasilkan kontribusi Powers of Tau kurva BN254.
-3. Melakukan fase kedua Groth16 untuk menghasilkan `VisualTOTP_final.zkey`.
-4. Mengekspor berkas verifikasi `VisualTOTP_vkey.json`.
-5. Menyinkronkan seluruh artefak build ke folder `client/public/zk/`.
-
----
-
-## Ringkasan Struktur Direktori
+Sistem ini dirancang terpisah menjadi dua sisi yang dapat langsung diintegrasikan oleh developer:
 
 ```text
-circuits/
-  VisualTOTP.circom             Sirkuit 2FA Visual TOTP dinamis
-  build/                        Artefak kompilasi (WASM, zkey, vkey)
-  scripts/compile.sh            Skrip otomatisasi kompilasi sirkuit
-client/
-  index.html                    Antarmuka pengguna (Visual TOTP ZK Prover)
-  src/
-    main.js                     Logika antarmuka klien
-    visualTotpCanvas.js         Generator matriks dan renderer canvas
-    zkClientService.js          Layanan komunikasi Web Worker
-    crypto/                     Fungsi visual pattern generator
-    ui/matrixRenderer.js        Komponen renderer grid 8x8
-  public/
-    workers/zkWorker.js         Web Worker SnarkJS
-    vendor/                     Pustaka snarkjs browser
-    zk/                         Artefak sirkuit untuk browser (WASM, zkey, vkey)
-sdk/
-  src/                          TypeScript/ESM library ZK Canvas SDK
-server/
-  src/
-    app.js                      Server Express, CORS/CORP header, dan routing
-    authController.js           Controller verifikasi Visual TOTP & challenge
-    nonceManager.js             Pengelola challenge nonce dan single-use burning ledger
-    zkVerifier.js               Verifikasi Groth16 server-side
-    rateLimiter.js              Pembatas laju permintaan IP
-tests/
-  visualTotp.test.js            Pengujian visual OTP, canvas, CORS, drift, dan nonce burn
-  sdk.test.js                   Pengujian unit SDK
-  sdkIntegration.test.js        Pengujian integrasi SDK
-  helpers/                      Helper mock worker bridge untuk testing
+├── circuits/      # Sirkuit Circom (Groth16 BN128) & Script Kompilasi
+├── contracts/     # Solidity Smart Contract Verifier (EVM On-Chain)
+├── sdk/           # Client SDK Browser/Frontend (ZkCanvasSDK, Web Worker, Canvas 8x8)
+├── server/        # Server SDK Backend/REST API (Express Router, Middleware, SnarkJS Verifier)
+└── demo/          # Developer Playground & Web Showcase (Terisolasi dari library inti)
 ```
+
+---
+
+## Instalasi
+
+```bash
+npm install zk-multi-image-keyfile-2fa
+```
+
+---
+
+## 1. Integrasi Client SDK (Frontend / Browser)
+
+Client SDK mengeksekusi komputasi Groth16 di latar belakang (Web Worker) dan merender matriks warna 8x8 (64 sel) berbasis palet 16-warna kontras tinggi.
+
+```javascript
+import { ZkCanvasSDK } from 'zk-multi-image-keyfile-2fa/client';
+
+// 1. Inisialisasi SDK
+const sdk = new ZkCanvasSDK({
+  secret: 'master-user-secret-12345',
+  canvas: document.getElementById('totpCanvas'), // HTMLCanvasElement (180x180)
+  rotationIntervalMs: 35000,                    // Siklus rotasi 35 detik
+  assetBaseUrl: '/zk/',                         // Lokasi VisualTOTP.wasm & zkey
+  workerScriptUrl: '/sdk/workerScript.js'
+});
+
+// 2. Berlangganan Event Real-time
+sdk.on('tick', ({ remainingMs, currentWindow }) => {
+  const secondsLeft = Math.ceil(remainingMs / 1000);
+  console.log(`Window #${currentWindow} - Sisa: ${secondsLeft}s`);
+});
+
+sdk.on('patternChange', ({ window, matrix }) => {
+  console.log(`Pola matriks 64-sel baru dirender untuk window #${window}`);
+});
+
+sdk.start();
+
+// 3. Sintesis ZK-Proof saat Autentikasi
+async function handleLogin(serverNonce) {
+  // Komputasi Groth16 dieksekusi di Web Worker tanpa memblokir UI thread
+  const { proof, publicSignals, durationMs } = await sdk.generateProof(serverNonce);
+
+  // Kirim bukti ke server
+  const response = await fetch('/api/zk-auth/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      username: 'alice',
+      sessionNonce: serverNonce,
+      proof,
+      publicSignals,
+      clientTimeWindow: sdk.getCurrentWindow()
+    })
+  });
+
+  return await response.json();
+}
+```
+
+---
+
+## 2. Integrasi Server SDK (Backend / Express)
+
+Server SDK memverifikasi bukti kriptografi Groth16, menerapkan *single-use nonce burning* untuk menangkal *replay attack*, dan memvalidasi batas toleransi *time drift* ($\pm 1$ jendela waktu).
+
+### Opsi A: Plug-and-Play REST API Router (Rekomendasi)
+
+Pasang seluruh endpoint challenge dan verifikasi secara instan dengan 1 baris kode:
+
+```javascript
+import express from 'express';
+import { createZkAuthRouter } from 'zk-multi-image-keyfile-2fa/server';
+
+const app = express();
+app.use(express.json());
+
+// Pasang rute REST API
+app.use('/api/zk-auth', createZkAuthRouter({
+  intervalSec: 35,
+  onSuccess: async (username, req) => {
+    // Callback opsional saat pembuktian valid: terbitkan token sesi
+    return { token: 'jwt-or-session-token', role: 'user' };
+  }
+}));
+
+app.listen(3000, () => console.log('Server berjalan di port 3000'));
+```
+
+### Opsi B: Express Middleware Kustom
+
+Gunakan middleware untuk melindungi rute tertentu:
+
+```javascript
+import { visualTotpMiddleware, issueVisualNonce } from 'zk-multi-image-keyfile-2fa/server';
+
+// 1. Endpoint untuk meminta challenge nonce sekali pakai
+app.post('/api/auth/challenge', (req, res) => {
+  const nonce = issueVisualNonce(req.body.username, 35000);
+  res.json({ sessionNonce: nonce });
+});
+
+// 2. Rute terproteksi yang divalidasi via ZK Proof
+app.post('/api/vault/unlock', visualTotpMiddleware({ intervalSec: 35 }), (req, res) => {
+  // req.zkSession otomatis disuntikkan oleh middleware
+  res.json({
+    status: 'Unlocked',
+    visualKey: req.zkSession.visualKey,
+    verificationDurationMs: req.zkSession.durationMs
+  });
+});
+```
+
+### Opsi C: Direct Function Verifier (Tanpa Framework)
+
+```javascript
+import { verifyVisualTotpProof } from 'zk-multi-image-keyfile-2fa/server';
+
+const verification = await verifyVisualTotpProof({
+  proof,
+  publicSignals,
+  clientTimeWindow,
+  sessionNonce,
+  intervalSec: 35
+});
+
+if (verification.valid) {
+  console.log(`Proof sah! Durasi verifikasi: ${verification.durationMs}ms`);
+} else {
+  console.error(`Ditolak: ${verification.error}`);
+}
+```
+
+---
+
+## Spesifikasi REST API
+
+### 1. `POST /api/zk-auth/challenge`
+Meminta challenge nonce sesi satu kali pakai (TTL 35 detik).
+
+**Request Body:**
+```json
+{
+  "username": "alice"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "sessionNonce": "1489248239048209384023948203948",
+  "intervalSec": 35
+}
+```
+
+### 2. `POST /api/zk-auth/verify`
+Memvalidasi Snark Groth16 proof dan sinyal publik klien.
+
+**Request Body:**
+```json
+{
+  "username": "alice",
+  "sessionNonce": "1489248239048209384023948203948",
+  "clientTimeWindow": 50642180,
+  "proof": {
+    "pi_a": ["0x...", "0x...", "0x01"],
+    "pi_b": [["0x...", "0x..."], ["0x...", "0x..."], ["0x01", "0x00"]],
+    "pi_c": ["0x...", "0x...", "0x01"]
+  },
+  "publicSignals": [
+    "128938129038102938102938120938",
+    "981293810293810293810293810293",
+    "50642180",
+    "1489248239048209384023948203948"
+  ]
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "visualKey": "128938129038102938102938120938",
+  "durationMs": 4.12,
+  "token": "jwt-session-token"
+}
+```
+
+---
+
+## Verifikasi On-Chain (Solidity Smart Contract)
+
+Untuk integrasi Web3/EVM on-chain, kontrak verifikasi Groth16 telah diekspor:
+- Berkas: [`contracts/VisualTOTPVerifier.sol`](contracts/VisualTOTPVerifier.sol)
+- Ekspor ulang kontrak dari proving key:
+  ```bash
+  npm run export:solidity
+  ```
+
+---
+
+## Basis Data Produksi & Migrasi SQL
+
+Skema tabel SQL baku untuk PostgreSQL / SQLite / MySQL tersedia di:
+- [`server/data/schema.sql`](server/data/schema.sql)
+  - Tabel `users` (`username`, `root_commitment`, `password_hash`, `salt_2fa`)
+  - Tabel `visual_totp_sessions` (pelacakan nonce satu kali pakai, masa berlaku, dan anti-replay)
+
+---
+
+## Menjalankan Proyek & Pengujian
+
+```bash
+# 1. Jalankan pengujian otomatis (33 unit & integration tests)
+npm test
+
+# 2. Build distribusi SDK
+npm run build:sdk
+
+# 3. Jalankan server demo lokal
+npm start
+```
+
+Akses demo lokal di `http://localhost:3000`.
 
 ---
 
 ## Lisensi
 
-Proyek ini dilisensikan di bawah lisensi MIT.
+Didistribusikan di bawah lisensi [MIT](LICENSE).
