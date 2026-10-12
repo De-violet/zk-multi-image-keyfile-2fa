@@ -113,26 +113,38 @@ app.use('/api/zk-auth', createZkAuthRouter({
 app.listen(3000, () => console.log('Server berjalan di port 3000'));
 ```
 
-### Opsi B: Express Middleware Kustom
+### Opsi B: Express Middleware Kustom dengan Storage Adapter (Redis/Memory)
 
-Gunakan middleware untuk melindungi rute tertentu:
+Gunakan middleware untuk melindungi rute tertentu dan sesuaikan storage nonce (misal via Redis):
 
 ```javascript
-import { visualTotpMiddleware, issueVisualNonce } from 'zk-multi-image-keyfile-2fa/server';
+import { 
+  visualTotpMiddleware, 
+  issueVisualNonce, 
+  MemoryNonceStore 
+} from 'zk-multi-image-keyfile-2fa/server';
+
+// Opsional: Integrasikan Redis Nonce Store (atau gunakan MemoryNonceStore bawaan)
+const redisNonceStore = {
+  get: async (nonce) => JSON.parse(await redisClient.get(`zk:nonce:${nonce}`)),
+  set: async (nonce, data, ttlMs) => redisClient.set(`zk:nonce:${nonce}`, JSON.stringify(data), 'PX', ttlMs),
+  delete: async (nonce) => redisClient.del(`zk:nonce:${nonce}`)
+};
 
 // 1. Endpoint untuk meminta challenge nonce sekali pakai
-app.post('/api/auth/challenge', (req, res) => {
-  const nonce = issueVisualNonce(req.body.username, 35000);
+app.post('/api/auth/challenge', async (req, res) => {
+  const nonce = issueVisualNonce(req.body.username, 35000, redisNonceStore);
   res.json({ sessionNonce: nonce });
 });
 
 // 2. Rute terproteksi yang divalidasi via ZK Proof
-app.post('/api/vault/unlock', visualTotpMiddleware({ intervalSec: 35 }), (req, res) => {
-  // req.zkSession otomatis disuntikkan oleh middleware
+app.post('/api/vault/unlock', visualTotpMiddleware({ 
+  intervalSec: 35, 
+  nonceStore: redisNonceStore 
+}), (req, res) => {
   res.json({
     status: 'Unlocked',
-    visualKey: req.zkSession.visualKey,
-    verificationDurationMs: req.zkSession.durationMs
+    visualKey: req.session.imageCommitment
   });
 });
 ```

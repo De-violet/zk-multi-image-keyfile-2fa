@@ -12,6 +12,11 @@ export {
 } from './middlewares/visualTotpMiddleware.js';
 
 export {
+  MemoryNonceStore,
+  defaultNonceStore
+} from './storage/nonceStore.js';
+
+export {
   verifyVisualTotpProof,
   verifyZkProof,
   loadVisualVerificationKey

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { issueVisualNonce } from './middlewares/visualTotpMiddleware.js';
+import { defaultNonceStore } from './storage/nonceStore.js';
 import { verifyVisualTotpProof } from './zkVerifier.js';
 import { createRateLimiter } from './rateLimiter.js';
 
@@ -9,12 +10,14 @@ import { createRateLimiter } from './rateLimiter.js';
  * @param {object} [options]
  * @param {number} [options.intervalSec=35] - Jendela rotasi waktu dalam detik
  * @param {string} [options.vKeyPath] - Lokasi opsional berkas VisualTOTP_vkey.json
+ * @param {object} [options.nonceStore=defaultNonceStore] - Storage adapter kustom (Memory/Redis)
  * @param {Function} [options.onSuccess] - Callback opsional saat pembuktian valid (username, req) => token|payload
  * @returns {Router}
  */
 export function createZkAuthRouter(options = {}) {
   const router = Router();
   const intervalSec = options.intervalSec || 35;
+  const nonceStore = options.nonceStore || defaultNonceStore;
 
   const limiter = createRateLimiter({
     windowMs: 60 * 1000,
@@ -25,7 +28,7 @@ export function createZkAuthRouter(options = {}) {
   // 1. Endpoint Challenge Nonce
   router.post('/challenge', limiter, (req, res) => {
     const { username } = req.body || {};
-    const sessionNonce = issueVisualNonce(username || 'anonymous', intervalSec * 1000);
+    const sessionNonce = issueVisualNonce(username || 'anonymous', intervalSec * 1000, nonceStore);
     res.json({
       success: true,
       sessionNonce,
@@ -43,6 +46,15 @@ export function createZkAuthRouter(options = {}) {
         error: 'Parameter tidak lengkap: proof, publicSignals, sessionNonce, dan clientTimeWindow wajib disertakan.'
       });
     }
+
+    const nonceRecord = await nonceStore.get(sessionNonce);
+    if (!nonceRecord) {
+      return res.status(403).json({
+        success: false,
+        error: 'Nonce tidak valid atau sudah pernah digunakan.'
+      });
+    }
+    await nonceStore.delete(sessionNonce);
 
     const result = await verifyVisualTotpProof({
       proof,

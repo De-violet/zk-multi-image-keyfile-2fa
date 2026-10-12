@@ -3,28 +3,30 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import * as snarkjs from 'snarkjs';
+import { defaultNonceStore } from '../storage/nonceStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// In-memory store untuk server nonce challenge dengan TTL
-export const visualNonceStore = new Map();
+// In-memory store adapter untuk server nonce challenge dengan TTL
+export const visualNonceStore = defaultNonceStore;
 
 /**
  * Menghasilkan challenge nonce unik untuk sesi klien.
  * @param {string} sessionId
- * @param {number} ttlMs (default: 35 detik)
+ * @param {number} [ttlMs=35000]
+ * @param {object} [nonceStore=defaultNonceStore] - Storage adapter kustom (Memory/Redis)
  * @returns {string}
  */
-export function issueVisualNonce(sessionId, ttlMs = 35000) {
+export function issueVisualNonce(sessionId, ttlMs = 35000, nonceStore = defaultNonceStore) {
   // Field element BN128 representasi angka bulat
   const rawBytes = crypto.randomBytes(16);
   const nonce = BigInt('0x' + rawBytes.toString('hex')).toString();
 
-  visualNonceStore.set(nonce, {
+  nonceStore.set(nonce, {
     sessionId,
     expiresAt: Date.now() + ttlMs
-  });
+  }, ttlMs);
   return nonce;
 }
 
@@ -52,7 +54,7 @@ export function loadVerificationKey(customPath = null) {
  * @param {number} [options.intervalSec] (default: 35 detik)
  */
 export function visualTotpMiddleware(options = {}) {
-  const { vKeyPath = null, intervalSec = 35 } = options;
+  const { vKeyPath = null, intervalSec = 35, nonceStore = defaultNonceStore } = options;
 
   return async (req, res, next) => {
     try {
@@ -66,7 +68,7 @@ export function visualTotpMiddleware(options = {}) {
       }
 
       const nonceStr = nonce.toString();
-      const nonceRecord = visualNonceStore.get(nonceStr);
+      const nonceRecord = await nonceStore.get(nonceStr);
 
       // 1. Validasi Keberadaan dan TTL Nonce
       if (!nonceRecord) {
@@ -77,7 +79,7 @@ export function visualTotpMiddleware(options = {}) {
       }
 
       if (Date.now() > nonceRecord.expiresAt) {
-        visualNonceStore.delete(nonceStr);
+        await nonceStore.delete(nonceStr);
         return res.status(403).json({
           success: false,
           error: 'Nonce telah kadaluarsa.'
@@ -89,7 +91,7 @@ export function visualTotpMiddleware(options = {}) {
       const windowDiff = Math.abs(Number(clientTimeWindow) - currentServerWindow);
 
       if (windowDiff > 1) {
-        visualNonceStore.delete(nonceStr);
+        await nonceStore.delete(nonceStr);
         return res.status(401).json({
           success: false,
           error: `Time drift melebihi batas toleransi ±1 interval (drift: ${windowDiff}). Periksa jam sistem.`
@@ -108,7 +110,7 @@ export function visualTotpMiddleware(options = {}) {
         signalTimeWindow.toString() !== clientTimeWindow.toString() ||
         signalServerNonce.toString() !== nonceStr
       ) {
-        visualNonceStore.delete(nonceStr);
+        await nonceStore.delete(nonceStr);
         return res.status(400).json({
           success: false,
           error: 'Parameter publik pada proof tidak cocok dengan timeWindow atau nonce sesi.'
@@ -120,7 +122,7 @@ export function visualTotpMiddleware(options = {}) {
       const isProofValid = await snarkjs.groth16.verify(vKey, publicSignals, proof);
 
       if (!isProofValid) {
-        visualNonceStore.delete(nonceStr);
+        await nonceStore.delete(nonceStr);
         return res.status(401).json({
           success: false,
           error: 'Verifikasi ZK Proof gagal: cryptographic proof invalid.'
@@ -128,7 +130,7 @@ export function visualTotpMiddleware(options = {}) {
       }
 
       // 5. Konsumsi Nonce (Anti-Replay) & Catat Sesi Berhasil
-      visualNonceStore.delete(nonceStr);
+      await nonceStore.delete(nonceStr);
 
       req.session = req.session || {};
       req.session.is2FAVerified = true;
