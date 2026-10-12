@@ -11,7 +11,7 @@ echo "========================================================="
 
 # Buat direktori build dan contracts jika belum ada
 mkdir -p circuits/build
-mkdir -p client/public/zk
+mkdir -p demo/public/zk
 
 CIRCUIT_NAME="${1:-VisualTOTP}"
 
@@ -73,10 +73,10 @@ fi
 echo "4. Mengekspor Verification Key..."
 npx snarkjs zkey export verificationkey "circuits/build/${CIRCUIT_NAME}_final.zkey" "circuits/build/${CIRCUIT_NAME}_vkey.json"
 
-echo "5. Menyalin artefak ZK ke direktori client..."
-cp "circuits/build/${CIRCUIT_NAME}_js/${CIRCUIT_NAME}.wasm" client/public/zk/
-cp "circuits/build/${CIRCUIT_NAME}_final.zkey" client/public/zk/
-cp "circuits/build/${CIRCUIT_NAME}_vkey.json" client/public/zk/
+echo "5. Menyalin artefak ZK ke direktori demo..."
+cp "circuits/build/${CIRCUIT_NAME}_js/${CIRCUIT_NAME}.wasm" demo/public/zk/
+cp "circuits/build/${CIRCUIT_NAME}_final.zkey" demo/public/zk/
+cp "circuits/build/${CIRCUIT_NAME}_vkey.json" demo/public/zk/
 
 rm -f circuits/build/pot12_0000.ptau circuits/build/pot12_0001.ptau circuits/build/pot12_final.ptau circuits/build/circuit_0000.zkey
 

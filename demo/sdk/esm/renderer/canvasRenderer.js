@@ -58,7 +58,9 @@ export class CanvasMatrixRenderer {
     if (!ctx) return;
 
     const size = 8;
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = (typeof this.canvas.getBoundingClientRect === 'function')
+      ? this.canvas.getBoundingClientRect()
+      : { width: this.canvas.width || 200, height: this.canvas.height || 200 };
     const cssWidth = rect.width || 200;
     const cssHeight = rect.height || 200;
     const cellW = cssWidth / size;

@@ -37,20 +37,20 @@ const staticCorsOptions = {
   }
 };
 
-// Sajikan file statis frontend dari folder client (vendor browser mandiri sudah ada di client/public/vendor)
-const clientPath = path.join(__dirname, '../../client');
-app.use(express.static(clientPath, staticCorsOptions));
+// Sajikan file statis frontend dari folder demo
+const demoPath = path.join(__dirname, '../../demo');
+app.use(express.static(demoPath, staticCorsOptions));
 
 // Sajikan artefak sirkuit ZKP (WASM, zkey, vkey)
 const zkArtifactsPath = path.join(__dirname, '../../circuits/build');
-const clientPublicZk = path.join(__dirname, '../../client/public/zk');
-const clientVendor = path.join(__dirname, '../../client/public/vendor');
-const clientWorkers = path.join(__dirname, '../../client/public/workers');
+const demoPublicZk = path.join(__dirname, '../../demo/public/zk');
+const demoVendor = path.join(__dirname, '../../demo/public/vendor');
+const demoWorkers = path.join(__dirname, '../../demo/public/workers');
 
 app.use('/zk', express.static(zkArtifactsPath, staticCorsOptions));
-app.use('/zk', express.static(clientPublicZk, staticCorsOptions));
-app.use('/vendor', express.static(clientVendor, staticCorsOptions));
-app.use('/workers', express.static(clientWorkers, staticCorsOptions));
+app.use('/zk', express.static(demoPublicZk, staticCorsOptions));
+app.use('/vendor', express.static(demoVendor, staticCorsOptions));
+app.use('/workers', express.static(demoWorkers, staticCorsOptions));
 app.use('/sdk', express.static(path.join(__dirname, '../../sdk/dist/browser'), staticCorsOptions));
 
 import { createRateLimiter } from './rateLimiter.js';

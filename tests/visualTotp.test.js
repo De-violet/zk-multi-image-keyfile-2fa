@@ -146,15 +146,17 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
   });
 
   await t.test('5. visualGenerator: Bit-packing (2x8-bit) dan ekstraksi 4-bit (16 palet)', async () => {
-    const { generateVisualPattern, VISUAL_PALETTE_16 } = await import('../client/src/crypto/visualGenerator.js');
-    const pattern = generateVisualPattern('0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0');
+    const { generateNumericMatrix, matrixToGrid2D } = await import('../sdk/src/core/matrix.js');
+    const { DEFAULT_PALETTE_16 } = await import('../sdk/src/core/palette.js');
+    const cells = generateNumericMatrix('0x123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0');
+    const grid = matrixToGrid2D(cells);
 
-    assert.equal(pattern.cells.length, 64);
-    assert.equal(pattern.palette.length, 16);
-    assert.equal(pattern.grid.length, 8);
-    assert.equal(pattern.grid[0].length, 8);
+    assert.equal(cells.length, 64);
+    assert.equal(DEFAULT_PALETTE_16.length, 16);
+    assert.equal(grid.length, 8);
+    assert.equal(grid[0].length, 8);
 
-    for (const cell of pattern.cells) {
+    for (const cell of cells) {
       assert.ok(cell >= 0 && cell < 16, `Indeks sel ${cell} harus dalam rentang 0-15`);
     }
   });
@@ -233,10 +235,9 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
     assert.equal(resNonceMismatch.valid, false, 'Mismatch serverNonce harus ditolak.');
   });
 
-  await t.test('8. Rendering Canvas: MatrixRenderer & renderVisualMatrix (64 sel, palet warna, isolasi DOM)', async () => {
-    const { MatrixRenderer } = await import('../client/src/ui/matrixRenderer.js');
-    const { renderVisualMatrix } = await import('../client/src/visualTotpCanvas.js');
-    const { generateVisualPattern } = await import('../client/src/crypto/visualGenerator.js');
+  await t.test('8. Rendering Canvas: CanvasMatrixRenderer (64 sel, palet warna, isolasi DOM)', async () => {
+    const { CanvasMatrixRenderer } = await import('../sdk/src/renderer/canvasRenderer.js');
+    const { generateNumericMatrix } = await import('../sdk/src/core/matrix.js');
 
     const drawCalls = [];
     const mockCtx = {
@@ -250,21 +251,14 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
       getContext: () => mockCtx
     };
 
-    // MatrixRenderer
-    const renderer = new MatrixRenderer(mockCanvas);
-    const pattern = generateVisualPattern('0x1234567890abcdef');
-    renderer.drawMatrix(pattern.cells, pattern.palette);
+    const renderer = new CanvasMatrixRenderer(mockCanvas);
+    const cells = generateNumericMatrix('0x1234567890abcdef');
+    renderer.render(cells);
 
     const fillCalls = drawCalls.filter((c) => c.type === 'fillRect');
     const clearCalls = drawCalls.filter((c) => c.type === 'clearRect');
     assert.equal(clearCalls.length, 1, 'Canvas harus dibersihkan sebelum merender');
     assert.equal(fillCalls.length, 64, 'Grid 8x8 harus merender tepat 64 sel');
-
-    // renderVisualMatrix
-    drawCalls.length = 0;
-    renderVisualMatrix(mockCanvas, '12345678901234567890');
-    const fillCallsDirect = drawCalls.filter((c) => c.type === 'fillRect');
-    assert.equal(fillCallsDirect.length, 64, 'renderVisualMatrix harus merender tepat 64 sel');
   });
 
   await t.test('9. CORS & CORP: Web Worker memuat WASM dan ZKey tanpa kendala', async () => {
