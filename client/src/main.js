@@ -136,7 +136,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnVerifyImageLogin = document.getElementById('btnVerifyImageLogin');
   const btnLoginNormal = document.getElementById('btnLoginNormal');
   const secretInput = document.getElementById('totpMasterSecret');
+  const btnRngSecret = document.getElementById('btnRngSecret');
   const userInput = document.getElementById('loginUsername');
+
+  if (btnRngSecret && secretInput) {
+    btnRngSecret.addEventListener('click', () => {
+      const bytes = new Uint8Array(10);
+      crypto.getRandomValues(bytes);
+      secretInput.value = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      initSdk();
+      logDev('SDK', 'Master Secret diacak via RNG', `(${secretInput.value.slice(0, 8)}...)`);
+    });
+  }
+
+  if (secretInput) {
+    secretInput.addEventListener('input', () => {
+      initSdk();
+    });
+  }
 
   // Dev Console Tabs
   const tabBtnLogs = document.getElementById('tabBtnLogs');

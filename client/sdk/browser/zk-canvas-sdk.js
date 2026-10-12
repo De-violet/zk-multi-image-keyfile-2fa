@@ -83,17 +83,19 @@ function normalizeToBytes32(input) {
       // String teks UTF-8 sembarang: hashing sponge dengan efek avalanche 32-byte penuh
       const encoder = new TextEncoder();
       const raw = encoder.encode(trimmed);
-      const buf = new Uint8Array(32);
-      let h = 0x811c9dc5;
+      let h1 = 0x811c9dc5;
+      let h2 = 0x9e3779b9;
       for (let i = 0; i < raw.length; i++) {
-        h = Math.imul(h ^ raw[i], 0x01000193);
-        h = (h << 13) | (h >>> 19);
+        h1 = Math.imul(h1 ^ raw[i], 0x01000193);
+        h2 = Math.imul(h2 ^ ((raw[i] << 5) | (raw[i] >>> 3)), 0x5bd1e995);
       }
+      const buf = new Uint8Array(32);
       for (let i = 0; i < 32; i++) {
-        h = Math.imul(h ^ (i * 31 + 7), 0x5bd1e995);
-        h ^= h >>> 13;
-        h = Math.imul(h, 0x1b873593);
-        buf[i] = ((h >>> ((i % 4) * 8)) ^ h) & 0xff;
+        h1 = Math.imul(h1 ^ (h2 + i * 0x9e3779b9), 0x85ebca6b);
+        h1 ^= h1 >>> 13;
+        h2 = Math.imul(h2 ^ h1, 0xc2b2ae35);
+        h2 ^= h2 >>> 16;
+        buf[i] = (h1 ^ (h2 >>> ((i % 4) * 7))) & 0xff;
       }
       return buf;
     }
