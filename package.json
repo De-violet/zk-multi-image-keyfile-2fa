@@ -3,11 +3,29 @@
   "version": "1.0.0",
   "description": "Zero-Knowledge Multi-Image Keyfile 2FA with Circom, SnarkJS, Groth16, and Poseidon",
   "main": "sdk/dist/esm/index.js",
+  "types": "./sdk/dist/types/index.d.ts",
   "exports": {
-    ".": "./sdk/dist/esm/index.js",
-    "./client": "./sdk/dist/esm/index.js",
-    "./server": "./server/src/index.js"
+    ".": {
+      "types": "./sdk/dist/types/index.d.ts",
+      "import": "./sdk/dist/esm/index.js",
+      "default": "./sdk/dist/esm/index.js"
+    },
+    "./client": {
+      "types": "./sdk/dist/types/index.d.ts",
+      "import": "./sdk/dist/esm/index.js",
+      "default": "./sdk/dist/esm/index.js"
+    },
+    "./server": {
+      "import": "./server/src/index.js",
+      "default": "./server/src/index.js"
+    }
   },
+  "files": [
+    "sdk/dist",
+    "server/src",
+    "contracts",
+    "circuits/build/VisualTOTP_vkey.json"
+  ],
   "type": "module",
   "scripts": {
     "compile:circuit": "bash circuits/scripts/compile.sh",
