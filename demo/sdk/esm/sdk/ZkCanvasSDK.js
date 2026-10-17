@@ -5,10 +5,36 @@
 
 import { calculateTimeWindow, calculateRemainingMs } from '../core/timeWindow.js';
 import { generateNumericMatrix } from '../core/matrix.js';
+import { toFieldElement } from '../core/binary.js';
 import { CanvasMatrixRenderer } from '../renderer/canvasRenderer.js';
 import { WorkerClient } from '../worker/workerClient.js';
 import { SnarkjsWorkerAdapter } from '../zk/zkAdapter.js';
 import { SdkEventEmitter } from '../events/eventEmitter.js';
+
+let _poseidonInstance = null;
+let _poseidonPromise = null;
+
+async function resolvePoseidon() {
+  if (_poseidonInstance) return _poseidonInstance;
+  if (!_poseidonPromise) {
+    _poseidonPromise = (async () => {
+      let builder = null;
+      if (typeof globalThis !== 'undefined' && globalThis.circomlibPoseidon?.buildPoseidon) {
+        builder = globalThis.circomlibPoseidon.buildPoseidon;
+      } else {
+        try {
+          const mod = await import('circomlibjs');
+          builder = mod.buildPoseidon;
+        } catch {}
+      }
+      if (builder) {
+        _poseidonInstance = await builder();
+      }
+      return _poseidonInstance;
+    })();
+  }
+  return _poseidonPromise;
+}
 
 export class ZkCanvasSDK {
   /**
@@ -67,6 +93,14 @@ export class ZkCanvasSDK {
     this.timerId = null;
     this.active = false;
     this.destroyed = false;
+    this.poseidon = null;
+
+    resolvePoseidon().then((p) => {
+      this.poseidon = p;
+      if (this.active && this.activeWindow !== null) {
+        this.evaluateCycle();
+      }
+    }).catch(() => {});
   }
 
   /**
@@ -79,6 +113,12 @@ export class ZkCanvasSDK {
     }
     if (this.active) return;
     this.active = true;
+
+    if (!this.poseidon) {
+      try {
+        this.poseidon = await resolvePoseidon();
+      } catch {}
+    }
 
     // Evaluasi pertama seketika
     this.evaluateCycle();
@@ -100,12 +140,19 @@ export class ZkCanvasSDK {
     const remainingMs = calculateRemainingMs(now, this.intervalMs);
 
     // Deteksi pergantian jendela waktu -> regenerasi matriks
-    if (this.activeWindow === null || currentWin !== this.activeWindow) {
+    if (this.activeWindow === null || currentWin !== this.activeWindow || !this.currentMatrix) {
       this.activeWindow = currentWin;
 
-      // Seed komputasi matriks deterministik
-      const seedCombined = `${this.secret}_win_${currentWin}`;
-      this.currentMatrix = generateNumericMatrix(seedCombined);
+      // Derivasi imageCommitment = Poseidon(masterSecret, currentWin)
+      if (this.poseidon) {
+        const secretField = toFieldElement(this.secret);
+        const hash = this.poseidon([secretField, BigInt(currentWin)]);
+        const imageCommitment = this.poseidon.F.toObject(hash);
+        this.currentMatrix = generateNumericMatrix(imageCommitment);
+      } else {
+        const seedCombined = `${this.secret}_win_${currentWin}`;
+        this.currentMatrix = generateNumericMatrix(seedCombined);
+      }
 
       // Render ke Presentation Layer jika canvas terpasang
       if (this.renderer) {
@@ -200,6 +247,7 @@ export class ZkCanvasSDK {
     this.events.removeAllListeners();
     this.currentMatrix = null;
     this.activeWindow = null;
+    this.poseidon = null;
   }
 
   /**

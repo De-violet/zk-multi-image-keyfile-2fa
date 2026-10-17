@@ -23,6 +23,21 @@ try {
   }
 }
 
+const SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+function toFieldElementString(input) {
+  if (input === undefined || input === null) return '0';
+  const str = input.toString().trim();
+  if (/^[0-9]+$/.test(str)) return (BigInt(str) % SNARK_SCALAR_FIELD).toString();
+  if (/^(0x)?[0-9a-fA-F]+$/.test(str)) {
+    const hex = str.startsWith('0x') ? str : '0x' + str;
+    return (BigInt(hex) % SNARK_SCALAR_FIELD).toString();
+  }
+  const bytes = new TextEncoder().encode(str);
+  const hex = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return (BigInt(hex) % SNARK_SCALAR_FIELD).toString();
+}
+
 self.onmessage = async (event) => {
   const { id, type, payload } = event.data || {};
 
@@ -41,9 +56,9 @@ self.onmessage = async (event) => {
       }
 
       const circuitInputs = {
-        masterSecret: secret.toString(),
+        masterSecret: toFieldElementString(secret),
         timeWindow: timeWindow.toString(),
-        serverNonce: challenge.toString()
+        serverNonce: toFieldElementString(challenge)
       };
 
       const { proof, publicSignals } = await snarkjs.groth16.fullProve(

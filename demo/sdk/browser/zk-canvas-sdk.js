@@ -132,6 +132,27 @@ function decomposeToWords16(bytes32) {
   return words;
 }
 
+const SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+/**
+ * Menormalisasi string, hex, bigint, atau teks biasa ke elemen scalar field BN254.
+ * @param {string|number|bigint} input
+ * @returns {bigint}
+ */
+function toFieldElement(input) {
+  if (typeof input === 'bigint') return input % SNARK_SCALAR_FIELD;
+  const str = input.toString().trim();
+  if (/^[0-9]+$/.test(str)) return BigInt(str) % SNARK_SCALAR_FIELD;
+  if (/^(0x)?[0-9a-fA-F]+$/.test(str)) {
+    const hex = str.startsWith('0x') ? str : '0x' + str;
+    return BigInt(hex) % SNARK_SCALAR_FIELD;
+  }
+  const bytes = new TextEncoder().encode(str);
+  const hex = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return BigInt(hex) % SNARK_SCALAR_FIELD;
+}
+
+
   /**
  * Pure Logic: Pemetaan palet warna 4-bit dan ekstraksi nibble.
  * Bebas dari DOM dan Canvas API.
@@ -586,6 +607,32 @@ class SdkEventEmitter {
 
 
 
+
+let _poseidonInstance = null;
+let _poseidonPromise = null;
+
+async function resolvePoseidon() {
+  if (_poseidonInstance) return _poseidonInstance;
+  if (!_poseidonPromise) {
+    _poseidonPromise = (async () => {
+      let builder = null;
+      if (typeof globalThis !== 'undefined' && globalThis.circomlibPoseidon?.buildPoseidon) {
+        builder = globalThis.circomlibPoseidon.buildPoseidon;
+      } else {
+        try {
+          const mod = await import('circomlibjs');
+          builder = mod.buildPoseidon;
+        } catch {}
+      }
+      if (builder) {
+        _poseidonInstance = await builder();
+      }
+      return _poseidonInstance;
+    })();
+  }
+  return _poseidonPromise;
+}
+
 class ZkCanvasSDK {
   /**
    * @param {object} config
@@ -643,6 +690,14 @@ class ZkCanvasSDK {
     this.timerId = null;
     this.active = false;
     this.destroyed = false;
+    this.poseidon = null;
+
+    resolvePoseidon().then((p) => {
+      this.poseidon = p;
+      if (this.active && this.activeWindow !== null) {
+        this.evaluateCycle();
+      }
+    }).catch(() => {});
   }
 
   /**
@@ -655,6 +710,12 @@ class ZkCanvasSDK {
     }
     if (this.active) return;
     this.active = true;
+
+    if (!this.poseidon) {
+      try {
+        this.poseidon = await resolvePoseidon();
+      } catch {}
+    }
 
     // Evaluasi pertama seketika
     this.evaluateCycle();
@@ -676,12 +737,19 @@ class ZkCanvasSDK {
     const remainingMs = calculateRemainingMs(now, this.intervalMs);
 
     // Deteksi pergantian jendela waktu -> regenerasi matriks
-    if (this.activeWindow === null || currentWin !== this.activeWindow) {
+    if (this.activeWindow === null || currentWin !== this.activeWindow || !this.currentMatrix) {
       this.activeWindow = currentWin;
 
-      // Seed komputasi matriks deterministik
-      const seedCombined = `${this.secret}_win_${currentWin}`;
-      this.currentMatrix = generateNumericMatrix(seedCombined);
+      // Derivasi imageCommitment = Poseidon(masterSecret, currentWin)
+      if (this.poseidon) {
+        const secretField = toFieldElement(this.secret);
+        const hash = this.poseidon([secretField, BigInt(currentWin)]);
+        const imageCommitment = this.poseidon.F.toObject(hash);
+        this.currentMatrix = generateNumericMatrix(imageCommitment);
+      } else {
+        const seedCombined = `${this.secret}_win_${currentWin}`;
+        this.currentMatrix = generateNumericMatrix(seedCombined);
+      }
 
       // Render ke Presentation Layer jika canvas terpasang
       if (this.renderer) {
@@ -776,6 +844,7 @@ class ZkCanvasSDK {
     this.events.removeAllListeners();
     this.currentMatrix = null;
     this.activeWindow = null;
+    this.poseidon = null;
   }
 
   /**

@@ -35,9 +35,9 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
     );
 
     assert.ok(proof);
-    assert.equal(publicSignals.length, 4);
-    assert.equal(publicSignals[2], timeWindow.toString());
-    assert.equal(publicSignals[3], nonce);
+    assert.equal(publicSignals.length, 5);
+    assert.equal(publicSignals[3], timeWindow.toString());
+    assert.equal(publicSignals[4], nonce);
   });
 
   await t.test('2. Middleware menerima proof valid dan mencatat sesi', async () => {
@@ -224,7 +224,7 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
 
     // 2. Jika attacker mencoba memasukkan nonce yang berbeda
     const tamperedNonceSignals = [...attackerSignals];
-    tamperedNonceSignals[3] = '987654321'; // nonce tidak cocok
+    tamperedNonceSignals[4] = '987654321'; // nonce tidak cocok (indeks ke-4)
 
     const resNonceMismatch = await verifyVisualTotpProof({
       proof: attackerProof,
@@ -349,7 +349,7 @@ test('Visual TOTP End-to-End Pipeline', async (t) => {
       assert.equal(verifyRes.status, 200);
       const verifyData = await verifyRes.json();
       assert.equal(verifyData.success, true);
-      assert.equal(verifyData.visualKey, publicSignals[0], 'Endpoint harus membaca kunci visual OTP (imageCommitment)');
+      assert.equal(verifyData.visualKey, publicSignals[1], 'Endpoint harus membaca kunci visual OTP (imageCommitment)');
       assert.ok(verifyData.sessionToken);
 
       // 4. Pembakaran Nonce Sekali Pakai (Replay Attack Ditolak)

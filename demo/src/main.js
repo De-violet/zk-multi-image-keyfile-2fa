@@ -1,4 +1,4 @@
-import { ZkCanvasSDK } from '../sdk/esm/index.js';
+import { ZkCanvasSDK, DEFAULT_PALETTE_16 } from '../sdk/esm/index.js';
 
 /**
  * Controller Antarmuka ZK-OTP Developer Playground
@@ -9,6 +9,8 @@ import { ZkCanvasSDK } from '../sdk/esm/index.js';
 let sdkInstance = null;
 let currentSessionToken = null;
 let currentKeyImageData = null;
+let currentKeyImageMatrix = null;
+let currentKeyImageValid = false;
 
 // Telemetry Logger untuk Developer Console
 function logDev(tag, msg, extra = '') {
@@ -224,15 +226,85 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Pasang preview gambar yang dipilih
+  const paletteRgb = (DEFAULT_PALETTE_16 || []).map(hex => [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16)
+  ]);
+
+  function extractMatrixFromImage(img) {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth || img.width;
+    canvas.height = img.naturalHeight || img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+
+    const cellW = canvas.width / 8;
+    const cellH = canvas.height / 8;
+    const extracted = [];
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const cx = Math.floor((c + 0.5) * cellW);
+        const cy = Math.floor((r + 0.5) * cellH);
+        const [pr, pg, pb] = ctx.getImageData(cx, cy, 1, 1).data;
+
+        let minDistance = Infinity;
+        let matchedIndex = 0;
+        for (let i = 0; i < paletteRgb.length; i++) {
+          const [cr, cg, cb] = paletteRgb[i];
+          const dist = (pr - cr) ** 2 + (pg - cg) ** 2 + (pb - cb) ** 2;
+          if (dist < minDistance) {
+            minDistance = dist;
+            matchedIndex = i;
+          }
+        }
+        extracted.push(matchedIndex);
+      }
+    }
+    return extracted;
+  }
+
+  // Pasang preview gambar yang dipilih dan validasi kesesuaian pola 8x8
   function setKeyImage(dataUrl) {
     currentKeyImageData = dataUrl;
+    currentKeyImageMatrix = null;
+    currentKeyImageValid = false;
+
     if (imgPreview && imagePreviewContainer) {
       imgPreview.src = dataUrl;
       imagePreviewContainer.style.display = 'flex';
     }
-    showStatus('loginStatus', 'info', 'Gambar kunci 2FA terpasang (jendela aktif 35s).');
-    logDev('SDK', 'Gambar kunci visual dimuat ke form autentikasi');
+
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const extracted = extractMatrixFromImage(img);
+        currentKeyImageMatrix = extracted;
+        const activeMatrix = sdkInstance ? sdkInstance.getMatrix() : null;
+
+        if (activeMatrix && activeMatrix.length === 64) {
+          const isMatch = extracted.every((v, i) => v === activeMatrix[i]);
+          currentKeyImageValid = isMatch;
+          if (isMatch) {
+            showStatus('loginStatus', 'success', '✓ Kunci gambar valid: 64 sel warna cocok 100% dengan jendela aktif.');
+            logDev('SDK', 'Validasi gambar visual 8x8 sukses (cocok dengan pola jendela aktif)');
+          } else {
+            showStatus('loginStatus', 'error', '⚠️ Pola gambar 8x8 tidak cocok dengan jendela aktif (gambar kedaluwarsa atau kunci salah).');
+            logDev('WARN', 'Validasi gambar 8x8 gagal: pola warna tidak cocok dengan matriks jendela aktif');
+          }
+        } else {
+          currentKeyImageValid = true;
+          showStatus('loginStatus', 'info', 'Gambar kunci 2FA dimuat.');
+          logDev('SDK', 'Gambar kunci visual dimuat ke form autentikasi');
+        }
+      } catch (err) {
+        currentKeyImageValid = false;
+        showStatus('loginStatus', 'error', 'Gagal memproses gambar: ' + err.message);
+        logDev('ERROR', 'Gagal ekstraksi piksel gambar 8x8', err.message);
+      }
+    };
+    img.src = dataUrl;
   }
 
   // 2. Generator: Unduh Gambar PNG
@@ -365,6 +437,11 @@ document.addEventListener('DOMContentLoaded', () => {
         showStatus('loginStatus', 'error', 'Silakan tempel atau unggah gambar kunci 2FA terlebih dahulu.');
         return;
       }
+      if (currentKeyImageMatrix && !currentKeyImageValid) {
+        showStatus('loginStatus', 'error', 'Otentikasi dibatalkan: Pola gambar kunci tidak cocok dengan jendela aktif.');
+        logDev('ERROR', 'Otentikasi ditolak di sisi klien: Matriks 8x8 gambar tidak cocok');
+        return;
+      }
 
       btnVerifyImageLogin.disabled = true;
       showStatus('loginStatus', 'info', 'Menyiapkan challenge nonce...');
@@ -405,7 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
         logDev('PROVER', `Proof selesai dihitung (${proofResult.durationMs}ms)`, `Signals count: ${proofResult.publicSignals.length}`);
 
         let verifyDuration = 0;
-        let visualKey = proofResult.publicSignals[0];
+        let visualKey = proofResult.publicSignals.length >= 2 ? proofResult.publicSignals[1] : proofResult.publicSignals[0];
 
         if (isOnline) {
           showStatus('loginStatus', 'info', `Proof selesai (${proofResult.durationMs}ms). Memvalidasi ke server...`);

@@ -207,6 +207,7 @@ Memvalidasi Snark Groth16 proof dan sinyal publik klien.
     "pi_c": ["0x...", "0x...", "0x01"]
   },
   "publicSignals": [
+    "784192837192837192837192837192",
     "128938129038102938102938120938",
     "981293810293810293810293810293",
     "50642180",
@@ -214,6 +215,13 @@ Memvalidasi Snark Groth16 proof dan sinyal publik klien.
   ]
 }
 ```
+
+> **Urutan Sinyal Publik (`nPublic: 5`):**
+> 1. `rootCommitment` — $Poseidon(masterSecret)$ (pengikatan identitas akun statis ke database)
+> 2. `imageCommitment` — $Poseidon(masterSecret, timeWindow)$ (kunci visual 8×8 jendela aktif)
+> 3. `sessionAuthToken` — $Poseidon(imageCommitment, serverNonce)$ (token otentikasi sesi)
+> 4. `timeWindow` — Indeks jendela waktu publik
+> 5. `serverNonce` — Challenge nonce acak sekali pakai dari server
 
 **Response (200 OK):**
 ```json

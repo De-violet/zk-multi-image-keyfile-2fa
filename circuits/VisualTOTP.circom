@@ -26,8 +26,14 @@ template VisualTOTP() {
     signal input serverNonce;
 
     // === Public Outputs ===
+    signal output rootCommitment;
     signal output imageCommitment;
     signal output sessionAuthToken;
+
+    // 0. Hitung komitmen identitas statis pengguna
+    component rootHasher = Poseidon(1);
+    rootHasher.inputs[0] <== masterSecret;
+    rootCommitment <== rootHasher.out;
 
     // 1. Hitung komitmen gambar aktif berbasis waktu
     component imgHasher = Poseidon(2);

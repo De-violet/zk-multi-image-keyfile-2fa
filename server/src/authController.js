@@ -267,13 +267,25 @@ export const authController = {
       let zkResult;
       let visualKey = null;
       if (publicSignals && Array.isArray(publicSignals) && publicSignals.length >= 4) {
-        visualKey = publicSignals[0].toString();
-        const timeWin = clientTimeWindow !== undefined ? clientTimeWindow : publicSignals[2];
+        const hasRoot = publicSignals.length >= 5;
+        visualKey = (hasRoot ? publicSignals[1] : publicSignals[0]).toString();
+        const proofRoot = hasRoot ? publicSignals[0].toString() : null;
+
+        if (proofRoot && user.rootCommitment && user.username !== 'demo_user') {
+          if (proofRoot !== user.rootCommitment.toString()) {
+            return res.status(401).json({
+              error: 'Secret tidak cocok dengan akun pengguna.'
+            });
+          }
+        }
+
+        const timeWin = clientTimeWindow !== undefined ? clientTimeWindow : (hasRoot ? publicSignals[3] : publicSignals[2]);
         zkResult = await verifyVisualTotpProof({
           proof,
           publicSignals,
           clientTimeWindow: timeWin,
-          sessionNonce: effectiveNonce
+          sessionNonce: effectiveNonce,
+          expectedRootCommitment: user.username !== 'demo_user' ? user.rootCommitment : null
         });
       } else {
         zkResult = await verifyZkProof(

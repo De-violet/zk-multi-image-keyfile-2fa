@@ -2,7 +2,7 @@
 set -e
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CLIENT_ZK="$ROOT_DIR/client/public/zk"
+CLIENT_ZK="$ROOT_DIR/demo/public/zk"
 BUILD_ZK="$ROOT_DIR/circuits/build"
 
 mkdir -p "$CLIENT_ZK"

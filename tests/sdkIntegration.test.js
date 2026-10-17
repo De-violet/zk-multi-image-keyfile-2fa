@@ -203,11 +203,11 @@ test('Phase A — SDK Integration Verification & Hardening', async (t) => {
     assert.ok(Array.isArray(result.proof.pi_b));
     assert.ok(Array.isArray(result.proof.pi_c));
 
-    // 2. Validasi public signals: [imageCommitment, sessionAuthToken, timeWindow, serverNonce]
+    // 2. Validasi public signals: [rootCommitment, imageCommitment, sessionAuthToken, timeWindow, serverNonce]
     assert.ok(Array.isArray(result.publicSignals));
-    assert.equal(result.publicSignals.length, 4);
-    assert.equal(result.publicSignals[2], sdk.getCurrentWindow().toString());
-    assert.equal(result.publicSignals[3], testNonce);
+    assert.equal(result.publicSignals.length, 5);
+    assert.equal(result.publicSignals[3], sdk.getCurrentWindow().toString());
+    assert.equal(result.publicSignals[4], testNonce);
 
     // 3. Validasi durasi
     assert.equal(typeof result.durationMs, 'number');

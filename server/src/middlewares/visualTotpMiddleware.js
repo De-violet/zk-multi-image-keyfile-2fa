@@ -99,12 +99,14 @@ export function visualTotpMiddleware(options = {}) {
       }
 
       // 3. Verifikasi Konsistensi Parameter Publik
-      // Urutan publicSignals sirkuit Circom VisualTOTP:
-      // [0] imageCommitment (output)
-      // [1] sessionAuthToken (output)
-      // [2] timeWindow (public input)
-      // [3] serverNonce (public input)
-      const [imageCommitment, sessionAuthToken, signalTimeWindow, signalServerNonce] = publicSignals;
+      // Format 5 sinyal: [rootCommitment, imageCommitment, sessionAuthToken, timeWindow, serverNonce]
+      // Format 4 sinyal lama: [imageCommitment, sessionAuthToken, timeWindow, serverNonce]
+      const hasRoot = publicSignals.length >= 5;
+      const rootCommitment = hasRoot ? publicSignals[0] : null;
+      const imageCommitment = hasRoot ? publicSignals[1] : publicSignals[0];
+      const sessionAuthToken = hasRoot ? publicSignals[2] : publicSignals[1];
+      const signalTimeWindow = hasRoot ? publicSignals[3] : publicSignals[2];
+      const signalServerNonce = hasRoot ? publicSignals[4] : publicSignals[3];
 
       if (
         signalTimeWindow.toString() !== clientTimeWindow.toString() ||

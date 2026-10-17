@@ -81,3 +81,24 @@ export function decomposeToWords16(bytes32) {
   }
   return words;
 }
+
+export const SNARK_SCALAR_FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
+
+/**
+ * Menormalisasi string, hex, bigint, atau teks biasa ke elemen scalar field BN254.
+ * @param {string|number|bigint} input
+ * @returns {bigint}
+ */
+export function toFieldElement(input) {
+  if (typeof input === 'bigint') return input % SNARK_SCALAR_FIELD;
+  const str = input.toString().trim();
+  if (/^[0-9]+$/.test(str)) return BigInt(str) % SNARK_SCALAR_FIELD;
+  if (/^(0x)?[0-9a-fA-F]+$/.test(str)) {
+    const hex = str.startsWith('0x') ? str : '0x' + str;
+    return BigInt(hex) % SNARK_SCALAR_FIELD;
+  }
+  const bytes = new TextEncoder().encode(str);
+  const hex = '0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return BigInt(hex) % SNARK_SCALAR_FIELD;
+}
+

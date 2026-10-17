@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 
 // Lokasi berkas verification key
 const VISUAL_VKEY_PATH = path.join(__dirname, '../../circuits/build/VisualTOTP_vkey.json');
-const CLIENT_VISUAL_VKEY_PATH = path.join(__dirname, '../../client/public/zk/VisualTOTP_vkey.json');
+const CLIENT_VISUAL_VKEY_PATH = path.join(__dirname, '../../demo/public/zk/VisualTOTP_vkey.json');
 
 let visualVKey = null;
 
@@ -38,6 +38,7 @@ export async function verifyVisualTotpProof({
   publicSignals,
   clientTimeWindow,
   sessionNonce,
+  expectedRootCommitment = null,
   intervalSec = 35
 }) {
   const startTime = performance.now();
@@ -54,15 +55,33 @@ export async function verifyVisualTotpProof({
     }
 
     // 2. Verifikasi konsistensi parameter publik
+    // Format 5 sinyal baru: [rootCommitment, imageCommitment, sessionAuthToken, timeWindow, serverNonce]
+    // Format 4 sinyal lama: [imageCommitment, sessionAuthToken, timeWindow, serverNonce]
+    const hasRoot = publicSignals.length >= 5;
+    const signalTimeWindow = hasRoot ? publicSignals[3] : publicSignals[2];
+    const signalNonce = hasRoot ? publicSignals[4] : publicSignals[3];
+    const signalRootCommitment = hasRoot ? publicSignals[0] : null;
+
     if (
-      publicSignals[2].toString() !== clientTimeWindow.toString() ||
-      publicSignals[3].toString() !== sessionNonce.toString()
+      signalTimeWindow.toString() !== clientTimeWindow.toString() ||
+      signalNonce.toString() !== sessionNonce.toString()
     ) {
       return {
         valid: false,
         durationMs: parseFloat((performance.now() - startTime).toFixed(2)),
         error: 'Public signals tidak cocok dengan timeWindow atau sessionNonce.'
       };
+    }
+
+    // Validasi kepemilikan secret akun jika expectedRootCommitment disediakan
+    if (expectedRootCommitment && signalRootCommitment) {
+      if (signalRootCommitment.toString() !== expectedRootCommitment.toString()) {
+        return {
+          valid: false,
+          durationMs: parseFloat((performance.now() - startTime).toFixed(2)),
+          error: 'Secret tidak cocok dengan akun pengguna.'
+        };
+      }
     }
 
     // 3. Verifikasi kriptografi Groth16 menggunakan VisualTOTP_vkey.json
@@ -95,7 +114,7 @@ export async function verifyVisualTotpProof({
 export async function verifyZkProof(sessionAuthToken, rootCommitment, sessionNonce, proof) {
   const startTime = performance.now();
   try {
-    const key = loadVerificationKey();
+    const key = loadVisualVerificationKey();
 
     const publicSignals = [
       sessionAuthToken.toString(),

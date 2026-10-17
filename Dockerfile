@@ -7,7 +7,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Salin seluruh kode aplikasi dan artefak kompilasi sirkuit
-COPY client/ ./client/
+COPY demo/ ./demo/
+COPY sdk/ ./sdk/
 COPY circuits/build/ ./circuits/build/
 COPY server/ ./server/
 COPY contracts/ ./contracts/
